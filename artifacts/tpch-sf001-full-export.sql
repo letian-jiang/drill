@@ -1,0 +1,10 @@
+-- Export all TPC-H SF0.01 columns to tab-separated files for Paimon.
+-- Source Parquet dates display with years offset by 13364 in DuckDB.
+COPY (SELECT * FROM 'contrib/data/tpch-sample-data/target/classes/tpch/customer.parquet') TO 'artifacts/tpch-sf001-full-csv/customer.tsv' (DELIMITER E'\t', QUOTE '', HEADER false, NULL '\N');
+COPY (SELECT * REPLACE (make_date(year(o_orderdate) - 13364, month(o_orderdate), day(o_orderdate)) AS o_orderdate) FROM 'contrib/data/tpch-sample-data/target/classes/tpch/orders.parquet') TO 'artifacts/tpch-sf001-full-csv/orders.tsv' (DELIMITER E'\t', QUOTE '', HEADER false, NULL '\N');
+COPY (SELECT * REPLACE (make_date(year(l_shipdate) - 13364, month(l_shipdate), day(l_shipdate)) AS l_shipdate, make_date(year(l_commitdate) - 13364, month(l_commitdate), day(l_commitdate)) AS l_commitdate, make_date(year(l_receiptdate) - 13364, month(l_receiptdate), day(l_receiptdate)) AS l_receiptdate) FROM 'contrib/data/tpch-sample-data/target/classes/tpch/lineitem.parquet') TO 'artifacts/tpch-sf001-full-csv/lineitem.tsv' (DELIMITER E'\t', QUOTE '', HEADER false, NULL '\N');
+COPY (SELECT * FROM 'contrib/data/tpch-sample-data/target/classes/tpch/nation.parquet') TO 'artifacts/tpch-sf001-full-csv/nation.tsv' (DELIMITER E'\t', QUOTE '', HEADER false, NULL '\N');
+COPY (SELECT * FROM 'contrib/data/tpch-sample-data/target/classes/tpch/part.parquet') TO 'artifacts/tpch-sf001-full-csv/part.tsv' (DELIMITER E'\t', QUOTE '', HEADER false, NULL '\N');
+COPY (SELECT * FROM 'contrib/data/tpch-sample-data/target/classes/tpch/partsupp.parquet') TO 'artifacts/tpch-sf001-full-csv/partsupp.tsv' (DELIMITER E'\t', QUOTE '', HEADER false, NULL '\N');
+COPY (SELECT * FROM 'contrib/data/tpch-sample-data/target/classes/tpch/region.parquet') TO 'artifacts/tpch-sf001-full-csv/region.tsv' (DELIMITER E'\t', QUOTE '', HEADER false, NULL '\N');
+COPY (SELECT * FROM 'contrib/data/tpch-sample-data/target/classes/tpch/supplier.parquet') TO 'artifacts/tpch-sf001-full-csv/supplier.tsv' (DELIMITER E'\t', QUOTE '', HEADER false, NULL '\N');

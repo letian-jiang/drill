@@ -37,6 +37,7 @@ import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
 import org.apache.drill.exec.record.metadata.TupleMetadata;
 import org.apache.drill.exec.store.StoragePluginRegistry;
 import org.apache.drill.exec.store.paimon.format.PaimonFormatPlugin;
+import org.apache.drill.exec.store.paimon.plan.DrillExprToPaimonTranslator;
 import org.apache.drill.exec.store.schedule.AffinityCreator;
 import org.apache.drill.exec.store.schedule.AssignmentCreator;
 import org.apache.drill.exec.store.schedule.EndpointByteMapImpl;
@@ -142,6 +143,11 @@ public class PaimonGroupScan extends AbstractGroupScan {
   }
 
   @Override
+  public boolean supportPlanCache() {
+    return formatPlugin.supportPlanCache() && path.indexOf('#') < 0;
+  }
+
+  @Override
   public PaimonGroupScan applyLimit(int maxRecords) {
     PaimonGroupScan clone = new PaimonGroupScan(this);
     clone.maxRecords = maxRecords;
@@ -228,6 +234,12 @@ public class PaimonGroupScan extends AbstractGroupScan {
   }
 
   @Override
+  @JsonIgnore
+  public String getExplainDigest() {
+    return formatPlanString(true);
+  }
+
+  @Override
   public ScanStats getScanStats() {
     long rowCount = chunks.stream()
       .mapToLong(PaimonCompleteWork::getRowCount)
@@ -246,6 +258,10 @@ public class PaimonGroupScan extends AbstractGroupScan {
 
   private void init() throws IOException {
     Table table = PaimonTableUtils.loadTable(formatPlugin, path);
+    if (path.indexOf('#') < 0 && condition != null
+        && DrillExprToPaimonTranslator.translate(condition, table.rowType()) == null) {
+      throw new IOException("Paimon cached predicate cannot be pushed down: " + path);
+    }
     String fileFormat = new CoreOptions(table.options()).fileFormatString();
     // Paimon supports multiple formats; Drill currently reads Parquet/ORC only.
     if (!"parquet".equalsIgnoreCase(fileFormat) && !"orc".equalsIgnoreCase(fileFormat)) {
@@ -257,7 +273,7 @@ public class PaimonGroupScan extends AbstractGroupScan {
     RowType rowType = table.rowType();
     ReadBuilder readBuilder = table.newReadBuilder();
     PaimonReadUtils.applyFilter(readBuilder, rowType, condition);
-    PaimonReadUtils.applyProjection(readBuilder, rowType, columns);
+    PaimonReadUtils.applyProjection(readBuilder, rowType, columns, condition);
     TableScan tableScan = readBuilder.newScan();
     List<Split> splits = tableScan.plan().splits();
     chunks = splits.stream()
@@ -323,7 +339,13 @@ public class PaimonGroupScan extends AbstractGroupScan {
 
   @Override
   public String toString() {
-    String conditionString = condition == null ? null : ExpressionStringBuilder.toString(condition).trim();
+    return formatPlanString(false);
+  }
+
+  private String formatPlanString(boolean explain) {
+    String conditionString = condition == null ? null
+        : (explain ? ExpressionStringBuilder.toExplainString(condition)
+            : ExpressionStringBuilder.toString(condition)).trim();
     return new PlanStringBuilder(this)
       .field("path", path)
       .field("schema", schema)

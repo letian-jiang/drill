@@ -17,9 +17,12 @@
  */
 package org.apache.drill.common.expression.parser;
 
+import java.util.Iterator;
+
 import org.apache.drill.common.exceptions.ExpressionParsingException;
 import org.apache.drill.common.expression.ExpressionStringBuilder;
 import org.apache.drill.common.expression.LogicalExpression;
+import org.apache.drill.common.expression.LiteralExpression;
 import org.apache.drill.common.parser.LogicalExpressionParser;
 import org.apache.drill.test.DrillTest;
 import org.junit.jupiter.api.Test;
@@ -106,6 +109,32 @@ class TreeTest extends DrillTest {
   void testFunctionCallWithoutParams() {
     String expr = "now()";
     testExpressionParsing(expr, expr);
+  }
+
+  @Test
+  void testBoundLiteralRoundTrip() {
+    String serialized = "add(bound_dynamic_param(0, INT, 42), bound_dynamic_param(1, VARCHAR(3), 'abc')) ";
+    LogicalExpression parsed = LogicalExpressionParser.parse(serialized);
+    assertEquals(serialized, ExpressionStringBuilder.toString(parsed));
+    assertEquals("add(?0, ?1) ", ExpressionStringBuilder.toExplainString(parsed));
+    LogicalExpression reparsed = LogicalExpressionParser.parse(ExpressionStringBuilder.toString(parsed));
+    Iterator<LogicalExpression> children = reparsed.iterator();
+    assertEquals(0, ((LiteralExpression) children.next()).getDynamicParamIndex());
+    assertEquals(1, ((LiteralExpression) children.next()).getDynamicParamIndex());
+  }
+
+  @Test
+  void testBoundDecimalRoundTrip() {
+    String serialized = "bound_dynamic_param(0, VARDECIMAL(9, 2), 1.50)";
+    LogicalExpression parsed = LogicalExpressionParser.parse(serialized);
+    assertEquals(serialized, ExpressionStringBuilder.toString(parsed));
+    assertEquals("?0", ExpressionStringBuilder.toExplainString(parsed));
+  }
+
+  @Test
+  void testBoundParameterRejectsNonLiteral() {
+    assertThrows(ExpressionParsingException.class,
+        () -> LogicalExpressionParser.parse("bound_dynamic_param(0, INT, add(1, 2))"));
   }
 
   /**

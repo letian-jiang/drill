@@ -40,6 +40,15 @@ public final class PaimonTableUtils {
   private PaimonTableUtils() {
   }
 
+  /** Table incarnation and definition version; data snapshots are intentionally excluded. */
+  public static String planCacheTableVersion(Table table) {
+    if (!(table instanceof FileStoreTable)) {
+      return null;
+    }
+    FileStoreTable fileStoreTable = (FileStoreTable) table;
+    return fileStoreTable.uuid() + ":" + fileStoreTable.schema().id();
+  }
+
   /**
    * Load a Paimon table directly from a filesystem path. If a metadata suffix is present,
    * returns the corresponding system table; otherwise returns the data table.

@@ -131,6 +131,9 @@ public class ProfileParser {
       plans = new ArrayList<>();
       String[] parts = plan.split("\n");
       for (String part : parts) {
+        if (part.startsWith("Parameters: ")) {
+          continue;
+        }
         plans.add(part);
         OperatorSummary opDef = new OperatorSummary(part);
         operations.add(opDef);

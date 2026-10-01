@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -69,7 +70,9 @@ public final class PaimonReadUtils {
    * @param rowType the table row type
    * @param columns the columns to project
    */
-  public static void applyProjection(ReadBuilder readBuilder, RowType rowType, List<SchemaPath> columns) {
+  /** The read projection must also contain columns used by an executed filter. */
+  public static void applyProjection(ReadBuilder readBuilder, RowType rowType,
+      List<SchemaPath> columns, LogicalExpression condition) {
     if (columns == null || columns.isEmpty()) {
       return;
     }
@@ -99,9 +102,35 @@ public final class PaimonReadUtils {
       projection.add(index);
     }
 
+    if (condition != null) {
+      Set<String> filterColumns = new LinkedHashSet<>();
+      collectFilterColumns(condition, filterColumns);
+      for (String name : filterColumns) {
+        if (projectedNames.add(name)) {
+          int index = rowType.getFieldIndex(name);
+          if (index >= 0) {
+            projection.add(index);
+          }
+        }
+      }
+    }
+
     if (!projection.isEmpty()) {
       int[] projectionArray = projection.stream().mapToInt(Integer::intValue).toArray();
       readBuilder.withProjection(projectionArray);
+    }
+  }
+
+  private static void collectFilterColumns(LogicalExpression expression, Set<String> names) {
+    if (expression instanceof SchemaPath) {
+      SchemaPath path = (SchemaPath) expression;
+      PathSegment root = path.getRootSegment();
+      if (root != null && root.isNamed() && root.getChild() == null) {
+        names.add(root.getNameSegment().getPath());
+      }
+    }
+    for (LogicalExpression child : expression) {
+      collectFilterColumns(child, names);
     }
   }
 }

@@ -103,7 +103,7 @@ public class DrillExprToIcebergTranslator extends AbstractExprVisitor<Expression
       }
       case FunctionNames.GE: {
         LogicalExpression nameRef = call.args().get(0);
-        Expression expression = call.args().get(0).accept(this, null);
+        Expression expression = call.args().get(1).accept(this, null);
         if (nameRef instanceof SchemaPath && expression instanceof ConstantExpression) {
           String name = IcebergGroupScan.getPath((SchemaPath) nameRef);
           return Expressions.greaterThanOrEqual(name, ((ConstantExpression<?>) expression).getValue());

@@ -91,7 +91,7 @@ public class PaimonRecordReader implements ManagedReader {
       RowType rowType = table.rowType();
       ReadBuilder readBuilder = table.newReadBuilder();
       PaimonReadUtils.applyFilter(readBuilder, rowType, condition);
-      PaimonReadUtils.applyProjection(readBuilder, rowType, columns);
+      PaimonReadUtils.applyProjection(readBuilder, rowType, columns, condition);
       RowType readType = readBuilder.readType();
 
       TupleSchema tableSchema = PaimonColumnConverterFactory.convertSchema(readType);

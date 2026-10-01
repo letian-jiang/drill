@@ -36,6 +36,7 @@ import org.apache.drill.exec.store.dfs.FileSystemConfig;
 import org.apache.drill.exec.store.dfs.FormatMatcher;
 import org.apache.drill.exec.store.dfs.FormatPlugin;
 import org.apache.drill.exec.store.paimon.PaimonGroupScan;
+import org.apache.drill.exec.store.paimon.PaimonTableUtils;
 import org.apache.drill.exec.store.paimon.plan.PaimonPluginImplementor;
 import org.apache.drill.exec.store.plan.rel.PluginRel;
 import org.apache.hadoop.conf.Configuration;
@@ -97,6 +98,24 @@ public class PaimonFormatPlugin implements FormatPlugin {
   @Override
   public boolean supportsRead() {
     return true;
+  }
+
+  @Override
+  public boolean supportPlanCache() {
+    return true;
+  }
+
+  @Override
+  public String planCacheTableVersion(FileSelection selection) throws IOException {
+    if (selection instanceof PaimonMetadataFileSelection) {
+      return null;
+    }
+    return planCacheTableVersion(selection.getSelectionRoot());
+  }
+
+  @Override
+  public String planCacheTableVersion(Path tablePath) throws IOException {
+    return PaimonTableUtils.planCacheTableVersion(PaimonTableUtils.loadTable(this, tablePath.toString()));
   }
 
   @Override
