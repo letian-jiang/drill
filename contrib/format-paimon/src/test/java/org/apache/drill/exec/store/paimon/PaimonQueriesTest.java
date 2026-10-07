@@ -71,6 +71,7 @@ public class PaimonQueriesTest extends ClusterTest {
   private static final String PAIMON_SCAN_PATTERN = "(PAIMON_GROUP_SCAN|PaimonGroupScan)";
   private static String tableRelativePath;
   private static String pkTableRelativePath;
+  private static String typedTableRelativePath;
 
   @BeforeClass
   public static void setUpBeforeClass() throws Exception {
@@ -91,6 +92,7 @@ public class PaimonQueriesTest extends ClusterTest {
 
     tableRelativePath = createAppendTable();
     pkTableRelativePath = createPrimaryKeyTable();
+    typedTableRelativePath = createTypedTable();
   }
 
   @Test
@@ -593,6 +595,57 @@ public class PaimonQueriesTest extends ClusterTest {
 
     long count = queryBuilder().sql(query).run().recordCount();
     assertEquals(2, count);
+  }
+
+  @Test
+  public void testFilterOnUnprojectedStringColumn() throws Exception {
+    assertEquals(1, client.queryBuilder().sql("select id from dfs.tmp.`%s` where name = 'alice'", tableRelativePath).singletonInt());
+  }
+
+  @Test
+  public void testDateAndTimeInternalRepresentation() throws Exception {
+    assertEquals("1969-12-31", client.queryBuilder().sql(
+      "select cast(event_date as varchar) from dfs.tmp.`%s` where id = 1", typedTableRelativePath).singletonString());
+    assertEquals("12:34:56.000", client.queryBuilder().sql(
+      "select cast(event_time as varchar) from dfs.tmp.`%s` where id = 1", typedTableRelativePath).singletonString());
+    assertEquals(1, client.queryBuilder().sql(
+      "select count(*) from dfs.tmp.`%s` where event_date is null", typedTableRelativePath).singletonLong());
+  }
+
+  @Test
+  public void testFilterOnUnprojectedDateAndDecimalColumns() throws Exception {
+    assertEquals(1, client.queryBuilder().sql(
+      "select id from dfs.tmp.`%s` where event_date < date '1970-01-01' and amount = 12.34",
+      typedTableRelativePath).singletonInt());
+  }
+
+  @Test
+  public void testCorrelatedJoinRetainsEarlierDateFilter() throws Exception {
+    assertEquals(1, client.queryBuilder().sql(
+      "select t.id from dfs.tmp.`%s` t where t.event_date < date '1970-01-01' "
+        + "and exists (select 1 from dfs.tmp.`%s` a where a.id = t.id)",
+      typedTableRelativePath, tableRelativePath).singletonInt());
+  }
+
+  private static String createTypedTable() throws Exception {
+    Path root = Paths.get(dirTestWatcher.getDfsTestTmpDir().toURI().getPath());
+    Path warehouse = root.resolve("paimon_warehouse");
+    Options options = new Options();
+    options.set("warehouse", warehouse.toUri().toString());
+    options.set("metastore", "filesystem");
+    try (Catalog catalog = CatalogFactory.createCatalog(CatalogContext.create(options, new Configuration()))) {
+      Schema schema = Schema.newBuilder().column("id", DataTypes.INT())
+        .column("event_date", DataTypes.DATE()).column("event_time", DataTypes.TIME(0))
+        .column("amount", DataTypes.DECIMAL(15, 2))
+        .option(CoreOptions.FILE_FORMAT.key(), "parquet").build();
+      Identifier identifier = Identifier.create(DB_NAME, "typed_table");
+      catalog.createTable(identifier, schema, false);
+      writeRows(catalog.getTable(identifier), Arrays.asList(
+        GenericRow.of(1, -1, 45296000, org.apache.paimon.data.Decimal.fromBigDecimal(new java.math.BigDecimal("12.34"), 15, 2)),
+        GenericRow.of(2, 9131, 0, org.apache.paimon.data.Decimal.fromBigDecimal(new java.math.BigDecimal("56.78"), 15, 2)),
+        GenericRow.of(3, null, null, null)));
+    }
+    return root.relativize(warehouse.resolve(DB_NAME + ".db/typed_table")).toString().replace('\\', '/');
   }
 
   private static String createAppendTable() throws Exception {

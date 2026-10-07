@@ -42,7 +42,9 @@ import java.util.List;
 
 @JsonTypeName("iceberg-read")
 @SuppressWarnings("unused")
-public class IcebergSubScan extends AbstractBase implements SubScan {
+public class IcebergSubScan extends AbstractBase implements SubScan,
+    org.apache.drill.exec.nativeexecution.scan.NativeScanProvider,
+    org.apache.drill.exec.nativeexecution.scan.JniScanProvider {
 
   private static final String OPERATOR_TYPE = "ICEBERG_SUB_SCAN";
 
@@ -121,6 +123,12 @@ public class IcebergSubScan extends AbstractBase implements SubScan {
     return tableScan;
   }
 
+  @Override
+  @JsonIgnore
+  public org.apache.drill.exec.nativeexecution.scan.NativeScanProvider.Descriptor nativeScan() {
+    return IcebergNativeScan.describe(this);
+  }
+
   public int getMaxRecords() {
     return maxRecords;
   }
@@ -178,6 +186,26 @@ public class IcebergSubScan extends AbstractBase implements SubScan {
       .tableScan(this.tableScan)
       .path(this.path)
       .maxRecords(this.maxRecords);
+  }
+
+  @Override
+  public com.fasterxml.jackson.databind.node.ObjectNode jniScan(
+      com.fasterxml.jackson.databind.ObjectMapper mapper,
+      com.fasterxml.jackson.databind.node.ObjectNode originalScan) {
+    java.util.Map<String, String> fs = new java.util.LinkedHashMap<>();
+    for (var property : formatPlugin.getFsConf()) {
+      fs.put(property.getKey(), property.getValue());
+    }
+    originalScan.set("fsConf", mapper.valueToTree(fs));
+    if (tableScan.snapshot() != null) {
+      originalScan.put("plannedSnapshotId", tableScan.snapshot().snapshotId());
+    }
+    return mapper.createObjectNode()
+        .put("provider", "org.apache.drill.exec.store.iceberg.read.IcebergJniScanFactory")
+        // Each IcebergWork already has its own IcebergRecordReader. Splitting
+        // preserves the planned snapshot, projection, filter and work bounds.
+        .put("independentWorkList", "workList")
+        .set("scan", originalScan);
   }
 
   public static class IcebergSubScanBuilder {

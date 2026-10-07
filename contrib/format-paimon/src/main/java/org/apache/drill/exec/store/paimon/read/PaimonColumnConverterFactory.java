@@ -38,6 +38,8 @@ import org.apache.paimon.types.RowType;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 
 public class PaimonColumnConverterFactory extends ColumnConverterFactory {
 
@@ -48,6 +50,12 @@ public class PaimonColumnConverterFactory extends ColumnConverterFactory {
   @Override
   public ColumnConverter.ScalarColumnConverter buildScalar(ColumnMetadata readerSchema, ValueWriter writer) {
     switch (readerSchema.type()) {
+      case DATE:
+        return new ColumnConverter.ScalarColumnConverter(value ->
+          writer.setDate(LocalDate.ofEpochDay(((Number) value).longValue())));
+      case TIME:
+        return new ColumnConverter.ScalarColumnConverter(value ->
+          writer.setTime(LocalTime.ofNanoOfDay(((Number) value).longValue() * 1000000L)));
       case TIMESTAMP:
       case TIMESTAMPTZ:
         return new ColumnConverter.ScalarColumnConverter(value -> writer.setTimestamp(asInstant(value)));

@@ -52,6 +52,7 @@ public class PhysicalPlanReader {
 
   private final ObjectReader physicalPlanReader;
   private final ObjectMapper mapper;
+  private volatile ObjectMapper nativeTransportMapper;
   private final ObjectReader operatorReader;
   private final ObjectReader logicalPlanReader;
 
@@ -91,6 +92,26 @@ public class PhysicalPlanReader {
 
   public String writeJson(PhysicalOperator op) throws JsonProcessingException{
     return mapper.writeValueAsString(op);
+  }
+
+  /** A detached mapper for transport-specific serialization without changing Drill's mapper. */
+  public ObjectMapper copyMapper() {
+    return mapper.copy();
+  }
+
+  /** Reuses transport serializers while keeping native decoration isolated from Drill's mapper. */
+  public ObjectMapper nativeTransportMapper() {
+    ObjectMapper transport = nativeTransportMapper;
+    if (transport == null) {
+      synchronized (this) {
+        transport = nativeTransportMapper;
+        if (transport == null) {
+          transport = mapper.copy();
+          nativeTransportMapper = transport;
+        }
+      }
+    }
+    return transport;
   }
 
   public PhysicalPlan readPhysicalPlan(String json) throws IOException {

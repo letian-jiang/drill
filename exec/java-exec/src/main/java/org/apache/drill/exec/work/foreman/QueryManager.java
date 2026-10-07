@@ -75,6 +75,19 @@ public class QueryManager implements AutoCloseable {
   private final String stringQueryId;
   private final RunQuery runQuery;
   private final Foreman foreman;
+  private final java.util.Map<FragmentHandle, DrillbitEndpoint> nativeRoutes = new java.util.concurrent.ConcurrentHashMap<>();
+  void setNativeRoutes(org.apache.drill.exec.proto.BitControl.NativeExecutionContext context) {
+    for (var route : context.getRouteList()) {
+      if (route.getBackend() == org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.Backend.NATIVE) {
+        nativeRoutes.put(route.getHandle(), route.getAssignment());
+      }
+    }
+  }
+  private org.apache.drill.exec.rpc.control.ControlTunnel controlTunnel(Controller controller,
+      DrillbitEndpoint endpoint, FragmentHandle handle) {
+    return nativeRoutes.containsKey(handle) ? controller.getNativeTunnel(nativeRoutes.get(handle))
+        : controller.getTunnel(endpoint);
+  }
 
   /*
    * Doesn't need to be thread safe as fragmentDataMap is generated in a single thread and then
@@ -214,7 +227,7 @@ public class QueryManager implements AutoCloseable {
         final FragmentHandle handle = data.getHandle();
         final DrillbitEndpoint endpoint = data.getEndpoint();
         // TODO is the CancelListener redundant? Does the FragmentStatusListener get notified of the same?
-        controller.getTunnel(endpoint).cancelFragment(new SignalListener(endpoint, handle,
+        controlTunnel(controller, endpoint, handle).cancelFragment(new SignalListener(endpoint, handle,
             SignalListener.Signal.CANCEL), handle);
         break;
 
@@ -237,7 +250,7 @@ public class QueryManager implements AutoCloseable {
     for(final FragmentData data : fragmentDataSet) {
       final DrillbitEndpoint endpoint = data.getEndpoint();
       final FragmentHandle handle = data.getHandle();
-      controller.getTunnel(endpoint).unpauseFragment(new SignalListener(endpoint, handle,
+      controlTunnel(controller, endpoint, handle).unpauseFragment(new SignalListener(endpoint, handle,
         SignalListener.Signal.UNPAUSE), handle);
     }
   }

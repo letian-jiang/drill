@@ -338,8 +338,20 @@ public class DecimalUtility {
    * scales (e.g., 2.00 and 2), are considered equal.
    */
   public static int compareVarLenBytes(DrillBuf left, int leftStart, int leftEnd, int leftScale, byte[] right, int rightScale, boolean absCompare) {
+    return compareVarLenBytes(left, leftStart, leftEnd, leftScale, right, right.length, rightScale, absCompare);
+  }
+
+  /**
+   * Compares a VarDecimal with the logical value in a reusable byte array.
+   * Bytes beyond {@code rightLength} are capacity, not part of the decimal.
+   *
+   * @param rightLength number of valid big-endian two's-complement bytes in right
+   */
+  public static int compareVarLenBytes(DrillBuf left, int leftStart, int leftEnd, int leftScale,
+      byte[] right, int rightLength, int rightScale, boolean absCompare) {
     java.math.BigDecimal bdLeft = getBigDecimalFromDrillBuf(left, leftStart, leftEnd - leftStart, leftScale);
-    java.math.BigDecimal bdRight = new BigDecimal(right.length == 0 ? BigInteger.ZERO : new BigInteger(right), rightScale);
+    java.math.BigDecimal bdRight = new BigDecimal(
+        rightLength == 0 ? BigInteger.ZERO : new BigInteger(right, 0, rightLength), rightScale);
     if (absCompare) {
       bdLeft = bdLeft.abs();
       bdRight = bdRight.abs();

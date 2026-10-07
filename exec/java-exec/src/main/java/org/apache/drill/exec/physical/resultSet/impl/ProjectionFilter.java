@@ -164,6 +164,11 @@ public interface ProjectionFilter {
     @Override
     public ProjResult projection(ColumnMetadata col) {
       if (projectionSet.enforceProjection(col, errorContext)) {
+        // A requested name inside DICT is a key, while its physical children
+        // are always key/value. Keep both, including complex value children.
+        if (col.isDict()) {
+          return PROJECTED;
+        }
         return new ProjResult(true, null,
             projectionFilter(projectionSet.mapProjection(col.name()), errorContext));
       } else {
@@ -246,7 +251,7 @@ public interface ProjectionFilter {
         return PROJECTED;
       } else {
         validateColumn(providedCol, col);
-        if (providedCol.isMap()) {
+        if (providedCol.isMap() || providedCol.isDict()) {
           return new ProjResult(true, providedCol, new TypeProjectionFilter(providedCol.tupleSchema(),
             errorContext));
         } else {
@@ -278,7 +283,7 @@ public interface ProjectionFilter {
         return NOT_PROJECTED;
       } else {
         validateColumn(providedCol, col);
-        if (providedCol.isMap()) {
+        if (providedCol.isMap() || providedCol.isDict()) {
           return new ProjResult(true, providedCol, new SchemaProjectionFilter(providedCol.tupleSchema(),
             errorContext));
         } else {

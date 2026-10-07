@@ -234,7 +234,7 @@ public class Decimal${aggrtype.className}Functions {
       if (tmp != null) {
         cmp = org.apache.drill.exec.util.DecimalUtility
             .compareVarLenBytes(in.buffer, in.start, in.end, in.scale,
-                tmp.getBytes(), scale.value, false);
+                tmp.getBytes(), tmp.getLength(), scale.value, false);
       } else {
         cmp = 1;
         tmp = new org.apache.drill.exec.expr.fn.impl.DrillByteArray();
@@ -259,7 +259,7 @@ public class Decimal${aggrtype.className}Functions {
       if (tmp != null) {
         cmp = org.apache.drill.exec.util.DecimalUtility
             .compareVarLenBytes(in.buffer, in.start, in.end, in.scale,
-                tmp.getBytes(), scale.value, false);
+                tmp.getBytes(), tmp.getLength(), scale.value, false);
       } else {
         cmp = -1;
         tmp = new org.apache.drill.exec.expr.fn.impl.DrillByteArray();

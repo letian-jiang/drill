@@ -73,6 +73,12 @@ public class ControllerImpl implements Controller {
   }
 
 
+  @Override
+  public ControlTunnel getNativeTunnel(DrillbitEndpoint endpoint) {
+    return new ControlTunnel(connectionRegistry.getNativeConnectionManager(
+        org.apache.drill.exec.nativeexecution.NativeExecutionRoutes.control(endpoint)));
+  }
+
   @SuppressWarnings("unchecked")
   @Override
   public <REQUEST extends MessageLite, RESPONSE extends MessageLite> void registerCustomHandler(int messageTypeId,

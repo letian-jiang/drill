@@ -57,9 +57,12 @@ public final class PaimonReadUtils {
     }
     // Translate Drill expression into a Paimon predicate (if supported).
     Predicate predicate = DrillExprToPaimonTranslator.translate(condition, rowType);
-    if (predicate != null) {
-      readBuilder.withFilter(predicate);
+    if (predicate == null) {
+      throw UserException.validationError()
+        .message("Cannot execute pushed Paimon predicate: %s", condition)
+        .build(logger);
     }
+    readBuilder.withFilter(predicate);
   }
 
   /**
@@ -70,6 +73,11 @@ public final class PaimonReadUtils {
    * @param columns the columns to project
    */
   public static void applyProjection(ReadBuilder readBuilder, RowType rowType, List<SchemaPath> columns) {
+    applyProjection(readBuilder, rowType, columns, null);
+  }
+
+  public static void applyProjection(ReadBuilder readBuilder, RowType rowType,
+    List<SchemaPath> columns, LogicalExpression condition) {
     if (columns == null || columns.isEmpty()) {
       return;
     }
@@ -81,7 +89,10 @@ public final class PaimonReadUtils {
 
     Set<String> projectedNames = new HashSet<>();
     List<Integer> projection = new ArrayList<>();
-    for (SchemaPath column : columns) {
+    // Record-level filtering requires its fields even if Drill projects them away.
+    List<SchemaPath> readerColumns = new ArrayList<>(columns);
+    addFilterColumns(condition, readerColumns);
+    for (SchemaPath column : readerColumns) {
       PathSegment segment = column.getRootSegment();
       if (segment == null || !segment.isNamed()) {
         continue;
@@ -104,4 +115,17 @@ public final class PaimonReadUtils {
       readBuilder.withProjection(projectionArray);
     }
   }
+  private static void addFilterColumns(LogicalExpression expression, List<SchemaPath> columns) {
+    if (expression == null) {
+      return;
+    }
+    if (expression instanceof SchemaPath) {
+      columns.add((SchemaPath) expression);
+      return;
+    }
+    for (LogicalExpression child : expression) {
+      addFilterColumns(child, columns);
+    }
+  }
+
 }

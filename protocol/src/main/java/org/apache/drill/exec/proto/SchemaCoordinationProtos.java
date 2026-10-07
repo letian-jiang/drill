@@ -30,7 +30,7 @@ public final class SchemaCoordinationProtos
             new org.apache.drill.exec.proto.SchemaCoordinationProtos.DrillbitEndpoint.MessageSchema();
         public static final org.apache.drill.exec.proto.SchemaCoordinationProtos.DrillbitEndpoint.BuilderSchema MERGE =
             new org.apache.drill.exec.proto.SchemaCoordinationProtos.DrillbitEndpoint.BuilderSchema();
-        
+
         public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint>
         {
             public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint message) throws java.io.IOException
@@ -52,6 +52,9 @@ public final class SchemaCoordinationProtos
                     output.writeEnum(7, message.getState().getNumber(), false);
                 if(message.hasHttpPort())
                     output.writeInt32(8, message.getHttpPort(), false);
+                if(message.hasNativeExecution())
+                    output.writeObject(9, message.getNativeExecution(), org.apache.drill.exec.proto.SchemaCoordinationProtos.NativeExecutionEndpoint.WRITE, false);
+
             }
             public boolean isInitialized(org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint message)
             {
@@ -116,6 +119,10 @@ public final class SchemaCoordinationProtos
                         case 8:
                             builder.setHttpPort(input.readInt32());
                             break;
+                        case 9:
+                            builder.setNativeExecution(input.mergeObject(org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint.newBuilder(), org.apache.drill.exec.proto.SchemaCoordinationProtos.NativeExecutionEndpoint.MERGE));
+
+                            break;
                         default:
                             input.handleUnknownField(number, this);
                     }
@@ -164,6 +171,7 @@ public final class SchemaCoordinationProtos
                 case 6: return "version";
                 case 7: return "state";
                 case 8: return "httpPort";
+                case 9: return "nativeExecution";
                 default: return null;
             }
         }
@@ -183,6 +191,153 @@ public final class SchemaCoordinationProtos
             fieldMap.put("version", 6);
             fieldMap.put("state", 7);
             fieldMap.put("httpPort", 8);
+            fieldMap.put("nativeExecution", 9);
+        }
+    }
+
+    public static final class NativeExecutionEndpoint
+    {
+        public static final org.apache.drill.exec.proto.SchemaCoordinationProtos.NativeExecutionEndpoint.MessageSchema WRITE =
+            new org.apache.drill.exec.proto.SchemaCoordinationProtos.NativeExecutionEndpoint.MessageSchema();
+        public static final org.apache.drill.exec.proto.SchemaCoordinationProtos.NativeExecutionEndpoint.BuilderSchema MERGE =
+            new org.apache.drill.exec.proto.SchemaCoordinationProtos.NativeExecutionEndpoint.BuilderSchema();
+
+        public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint>
+        {
+            public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint message) throws java.io.IOException
+            {
+                if(message.hasAddress())
+                    output.writeString(1, message.getAddress(), false);
+                if(message.hasPort())
+                    output.writeInt32(2, message.getPort(), false);
+                if(message.hasProtocolVersion())
+                    output.writeInt32(3, message.getProtocolVersion(), false);
+                if(message.hasTlsEnabled())
+                    output.writeBool(4, message.getTlsEnabled(), false);
+                if(message.hasControlPort())
+                    output.writeInt32(5, message.getControlPort(), false);
+                if(message.hasDataPort())
+                    output.writeInt32(6, message.getDataPort(), false);
+            }
+            public boolean isInitialized(org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint message)
+            {
+                return message.isInitialized();
+            }
+            public java.lang.String getFieldName(int number)
+            {
+                return org.apache.drill.exec.proto.SchemaCoordinationProtos.NativeExecutionEndpoint.getFieldName(number);
+            }
+            public int getFieldNumber(java.lang.String name)
+            {
+                return org.apache.drill.exec.proto.SchemaCoordinationProtos.NativeExecutionEndpoint.getFieldNumber(name);
+            }
+            public java.lang.Class<org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint> typeClass()
+            {
+                return org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint.class;
+            }
+            public java.lang.String messageName()
+            {
+                return org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint.class.getSimpleName();
+            }
+            public java.lang.String messageFullName()
+            {
+                return org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint.class.getName();
+            }
+            //unused
+            public void mergeFrom(io.protostuff.Input input, org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint message) throws java.io.IOException {}
+            public org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint newMessage() { return null; }
+        }
+        public static class BuilderSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint.Builder>
+        {
+            public void mergeFrom(io.protostuff.Input input, org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint.Builder builder) throws java.io.IOException
+            {
+                for(int number = input.readFieldNumber(this);; number = input.readFieldNumber(this))
+                {
+                    switch(number)
+                    {
+                        case 0:
+                            return;
+                        case 1:
+                            builder.setAddress(input.readString());
+                            break;
+                        case 2:
+                            builder.setPort(input.readInt32());
+                            break;
+                        case 3:
+                            builder.setProtocolVersion(input.readInt32());
+                            break;
+                        case 4:
+                            builder.setTlsEnabled(input.readBool());
+                            break;
+                        case 5:
+                            builder.setControlPort(input.readInt32());
+                            break;
+                        case 6:
+                            builder.setDataPort(input.readInt32());
+                            break;
+                        default:
+                            input.handleUnknownField(number, this);
+                    }
+                }
+            }
+            public boolean isInitialized(org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint.Builder builder)
+            {
+                return builder.isInitialized();
+            }
+            public org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint.Builder newMessage()
+            {
+                return org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint.newBuilder();
+            }
+            public java.lang.String getFieldName(int number)
+            {
+                return org.apache.drill.exec.proto.SchemaCoordinationProtos.NativeExecutionEndpoint.getFieldName(number);
+            }
+            public int getFieldNumber(java.lang.String name)
+            {
+                return org.apache.drill.exec.proto.SchemaCoordinationProtos.NativeExecutionEndpoint.getFieldNumber(name);
+            }
+            public java.lang.Class<org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint.Builder> typeClass()
+            {
+                return org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint.Builder.class;
+            }
+            public java.lang.String messageName()
+            {
+                return org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint.class.getSimpleName();
+            }
+            public java.lang.String messageFullName()
+            {
+                return org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint.class.getName();
+            }
+            //unused
+            public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.CoordinationProtos.NativeExecutionEndpoint.Builder builder) throws java.io.IOException {}
+        }
+        public static java.lang.String getFieldName(int number)
+        {
+            switch(number)
+            {
+                case 1: return "address";
+                case 2: return "port";
+                case 3: return "protocolVersion";
+                case 4: return "tlsEnabled";
+                case 5: return "controlPort";
+                case 6: return "dataPort";
+                default: return null;
+            }
+        }
+        public static int getFieldNumber(java.lang.String name)
+        {
+            java.lang.Integer number = fieldMap.get(name);
+            return number == null ? 0 : number.intValue();
+        }
+        private static final java.util.HashMap<java.lang.String,java.lang.Integer> fieldMap = new java.util.HashMap<java.lang.String,java.lang.Integer>();
+        static
+        {
+            fieldMap.put("address", 1);
+            fieldMap.put("port", 2);
+            fieldMap.put("protocolVersion", 3);
+            fieldMap.put("tlsEnabled", 4);
+            fieldMap.put("controlPort", 5);
+            fieldMap.put("dataPort", 6);
         }
     }
 
@@ -192,7 +347,7 @@ public final class SchemaCoordinationProtos
             new org.apache.drill.exec.proto.SchemaCoordinationProtos.DrillServiceInstance.MessageSchema();
         public static final org.apache.drill.exec.proto.SchemaCoordinationProtos.DrillServiceInstance.BuilderSchema MERGE =
             new org.apache.drill.exec.proto.SchemaCoordinationProtos.DrillServiceInstance.BuilderSchema();
-        
+
         public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.CoordinationProtos.DrillServiceInstance>
         {
             public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.CoordinationProtos.DrillServiceInstance message) throws java.io.IOException
@@ -319,7 +474,7 @@ public final class SchemaCoordinationProtos
             new org.apache.drill.exec.proto.SchemaCoordinationProtos.Roles.MessageSchema();
         public static final org.apache.drill.exec.proto.SchemaCoordinationProtos.Roles.BuilderSchema MERGE =
             new org.apache.drill.exec.proto.SchemaCoordinationProtos.Roles.BuilderSchema();
-        
+
         public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.CoordinationProtos.Roles>
         {
             public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.CoordinationProtos.Roles message) throws java.io.IOException

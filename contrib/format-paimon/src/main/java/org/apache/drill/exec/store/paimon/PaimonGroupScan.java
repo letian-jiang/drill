@@ -257,7 +257,7 @@ public class PaimonGroupScan extends AbstractGroupScan {
     RowType rowType = table.rowType();
     ReadBuilder readBuilder = table.newReadBuilder();
     PaimonReadUtils.applyFilter(readBuilder, rowType, condition);
-    PaimonReadUtils.applyProjection(readBuilder, rowType, columns);
+    PaimonReadUtils.applyProjection(readBuilder, rowType, columns, condition);
     TableScan tableScan = readBuilder.newScan();
     List<Split> splits = tableScan.plan().splits();
     chunks = splits.stream()

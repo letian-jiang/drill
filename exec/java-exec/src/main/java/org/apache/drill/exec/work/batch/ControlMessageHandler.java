@@ -260,6 +260,9 @@ public class ControlMessageHandler implements RequestHandler<ControlConnection> 
 
   public Ack initializeFragment(InitializeFragments fragments) throws RpcException {
     final DrillbitContext drillbitContext = bee.getContext();
+    if (fragments.hasNativeExecution()) {
+      throw new RpcException("Native fragments must be submitted directly to the native control service");
+    }
     for (int i = 0; i < fragments.getFragmentCount(); i++) {
       startNewFragment(fragments.getFragment(i), drillbitContext);
     }

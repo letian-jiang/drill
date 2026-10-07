@@ -114,6 +114,11 @@ public class RepeatedDictVector extends BaseRepeatedValueVector {
     pair.copyValueSafe(fromIndex, toIndex);
   }
 
+  /** Entry point used by generated partition sender and sort copy code. */
+  public void copyFromSafe(int fromIndex, int thisIndex, RepeatedDictVector from) {
+    copyEntry(thisIndex, from, fromIndex);
+  }
+
   public class Accessor extends BaseRepeatedValueVector.BaseRepeatedAccessor {
 
     @Override

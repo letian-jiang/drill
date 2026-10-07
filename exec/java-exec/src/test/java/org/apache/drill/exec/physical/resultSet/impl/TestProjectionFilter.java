@@ -49,6 +49,26 @@ public class TestProjectionFilter extends BaseTest{
   private static final ColumnMetadata MAP_COL2 = MetadataUtils.newMap("m2", new TupleSchema());
 
   @Test
+  public void dictLookupPreservesPhysicalKeyAndComplexValueProjection() {
+    TupleMetadata schema = new SchemaBuilder().addDict("d", MinorType.VARCHAR)
+        .mapValue().addNullable("n", MinorType.BIGINT).resumeDict().resumeSchema().build();
+    var dict = schema.metadata("d");
+    var requested = Projections.parse(RowSetTestUtils.projectList("d.someKey.n"));
+    ProjectionFilter direct = new DirectProjectionFilter(requested, EmptyErrorContext.INSTANCE);
+    for (ProjectionFilter filter : new ProjectionFilter[] {
+        direct,
+        new CompoundProjectionFilter(direct, new TypeProjectionFilter(schema, EmptyErrorContext.INSTANCE)),
+        new CompoundProjectionFilter(direct, new SchemaProjectionFilter(schema, EmptyErrorContext.INSTANCE))}) {
+      var result = filter.projection(dict);
+      assertTrue(result.isProjected);
+      assertTrue(result.mapFilter.projection(dict.tupleSchema().metadata("key")).isProjected);
+      var value = result.mapFilter.projection(dict.tupleSchema().metadata("value"));
+      assertTrue(value.isProjected);
+      assertTrue(value.mapFilter.projection(dict.tupleSchema().metadata("value").tupleSchema().metadata("n")).isProjected);
+    }
+  }
+
+  @Test
   public void testImplicitAll() {
     ProjectionFilter filter = ProjectionFilter.PROJECT_ALL;
     assertTrue(filter.isProjected("a"));

@@ -124,6 +124,19 @@ public final class ExecConstants {
   @Deprecated
   public static final BooleanValidator EXTERNAL_SORT_DISABLE_MANAGED_OPTION = new BooleanValidator("exec.sort.disable_managed", null);
 
+  public static final BooleanValidator FOREMAN_ROOT_ONLY = new BooleanValidator(
+      "exec.foreman.root_only", new OptionDescription("Assign only the root fragment to the query Foreman."));
+  public static final BooleanValidator NATIVE_FRAGMENT_STRICT = new BooleanValidator(
+      "exec.native_fragment.strict", new OptionDescription("Require native execution of every non-root fragment; reject unsupported compute."));
+  public static final LongValidator NATIVE_SCAN_BATCH_RECORDS = new RangeLongValidator(
+      "exec.native_scan.batch_records", 1, 65535,
+      new OptionDescription("Default batch record limit for managed Java scans supplying native fragments."));
+  public static final BooleanValidator NATIVE_SCAN_ENABLED = new BooleanValidator(
+      "exec.native_scan.enabled", new OptionDescription("Use an available plugin native reader; otherwise use the Java plugin reader."));
+
+  public static final BooleanValidator NATIVE_FRAGMENT_ENABLED = new BooleanValidator(
+      "exec.native_fragment.enabled", new OptionDescription("Execute all non-root fragments in the native engine."));
+
   // Hash Join Options
   public static final String HASHJOIN_HASHTABLE_CALC_TYPE_KEY = "exec.hashjoin.hash_table_calc_type";
   public static final EnumeratedStringValidator HASHJOIN_HASHTABLE_CALC_TYPE = new EnumeratedStringValidator(HASHJOIN_HASHTABLE_CALC_TYPE_KEY,

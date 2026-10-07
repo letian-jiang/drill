@@ -287,6 +287,10 @@ public class FragmentExecutor implements Runnable {
       final FragmentRoot rootOperator = this.rootOperator != null ? this.rootOperator :
           fragmentContext.getPlanReader().readFragmentRoot(fragment.getFragmentJson());
 
+      if (fragment.getHandle().getMajorFragmentId() != 0
+          && org.apache.drill.exec.nativeexecution.NativeExecutionRoutes.enabled(fragmentContext.getOptions())) {
+        throw new IllegalStateException("Native non-root fragments must execute through the native control service");
+      }
       root = ImplCreator.getExec(fragmentContext, rootOperator);
       if (root == null) {
         return;

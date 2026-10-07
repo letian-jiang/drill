@@ -244,6 +244,7 @@ public class ZKClusterCoordinator extends ClusterCoordinator {
                 .id(h.id)
                 .payload(endpoint).build();
         discovery.updateService(serviceInstance);
+        h.setEndPoint(endpoint);
       } catch (Exception e) {
         Throwables.throwIfUnchecked(e);
         throw new RuntimeException(e);

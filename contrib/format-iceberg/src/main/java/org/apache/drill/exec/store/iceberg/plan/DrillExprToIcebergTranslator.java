@@ -18,6 +18,7 @@
 package org.apache.drill.exec.store.iceberg.plan;
 
 import org.apache.drill.common.FunctionNames;
+import org.apache.drill.common.expression.CastExpression;
 import org.apache.drill.common.expression.FunctionCall;
 import org.apache.drill.common.expression.LogicalExpression;
 import org.apache.drill.common.expression.SchemaPath;
@@ -27,6 +28,11 @@ import org.apache.drill.common.expression.visitors.ExprVisitor;
 import org.apache.drill.exec.store.iceberg.IcebergGroupScan;
 import org.apache.iceberg.expressions.Expression;
 import org.apache.iceberg.expressions.Expressions;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 
 public class DrillExprToIcebergTranslator extends AbstractExprVisitor<Expression, Void, RuntimeException> {
 
@@ -103,7 +109,7 @@ public class DrillExprToIcebergTranslator extends AbstractExprVisitor<Expression
       }
       case FunctionNames.GE: {
         LogicalExpression nameRef = call.args().get(0);
-        Expression expression = call.args().get(0).accept(this, null);
+        Expression expression = call.args().get(1).accept(this, null);
         if (nameRef instanceof SchemaPath && expression instanceof ConstantExpression) {
           String name = IcebergGroupScan.getPath((SchemaPath) nameRef);
           return Expressions.greaterThanOrEqual(name, ((ConstantExpression<?>) expression).getValue());
@@ -174,17 +180,82 @@ public class DrillExprToIcebergTranslator extends AbstractExprVisitor<Expression
 
   @Override
   public Expression visitDateConstant(ValueExpressions.DateExpression dateExpr, Void value) throws RuntimeException {
-    return new ConstantExpression<>(dateExpr.getDate());
+    return new ConstantExpression<>(Math.toIntExact(Math.floorDiv(dateExpr.getDate(), 86400000L)));
+  }
+
+  @Override
+  public Expression visitCastExpression(CastExpression cast, Void value) {
+    if (cast.getMajorType().getMinorType() == org.apache.drill.common.types.TypeProtos.MinorType.TIME) {
+      try {
+        int millis;
+        if (cast.getInput() instanceof ValueExpressions.IntExpression) {
+          millis = ((ValueExpressions.IntExpression) cast.getInput()).getInt();
+        } else if (cast.getInput() instanceof ValueExpressions.LongExpression) {
+          millis = Math.toIntExact(((ValueExpressions.LongExpression) cast.getInput()).getLong());
+        } else if (cast.getInput() instanceof ValueExpressions.QuotedString) {
+          millis = (int) (LocalTime.parse(((ValueExpressions.QuotedString) cast.getInput())
+              .getString()).toNanoOfDay() / 1_000_000);
+        } else {
+          return null;
+        }
+        return visitTimeConstant(new ValueExpressions.TimeExpression(millis), value);
+      } catch (DateTimeParseException | ArithmeticException e) {
+        return null;
+      }
+    }
+    if (cast.getMajorType().getMinorType() == org.apache.drill.common.types.TypeProtos.MinorType.TIMESTAMP) {
+      try {
+        long millis;
+        if (cast.getInput() instanceof ValueExpressions.LongExpression) {
+          millis = ((ValueExpressions.LongExpression) cast.getInput()).getLong();
+        } else if (cast.getInput() instanceof ValueExpressions.IntExpression) {
+          millis = ((ValueExpressions.IntExpression) cast.getInput()).getInt();
+        } else if (cast.getInput() instanceof ValueExpressions.QuotedString) {
+          millis = LocalDateTime.parse(((ValueExpressions.QuotedString) cast.getInput())
+              .getString().replace(' ', 'T')).toInstant(ZoneOffset.UTC).toEpochMilli();
+        } else {
+          return null;
+        }
+        return visitTimeStampConstant(new ValueExpressions.TimeStampExpression(millis), value);
+      } catch (DateTimeParseException | ArithmeticException e) {
+        return null;
+      }
+    }
+    // Reconstruct epoch days after a minor fragment deserializes a DATE cast.
+    if (cast.getMajorType().getMinorType() == org.apache.drill.common.types.TypeProtos.MinorType.DATE) {
+      if (cast.getInput() instanceof ValueExpressions.LongExpression) {
+        return visitDateConstant(new ValueExpressions.DateExpression(
+            ((ValueExpressions.LongExpression) cast.getInput()).getLong()), value);
+      }
+      if (cast.getInput() instanceof ValueExpressions.IntExpression) {
+        return visitDateConstant(new ValueExpressions.DateExpression(
+            ((ValueExpressions.IntExpression) cast.getInput()).getInt()), value);
+      }
+      if (!(cast.getInput() instanceof ValueExpressions.QuotedString)) {
+        return null;
+      }
+      try {
+        return new ConstantExpression<>(Math.toIntExact(LocalDate.parse(
+            ((ValueExpressions.QuotedString) cast.getInput()).getString()).toEpochDay()));
+      } catch (DateTimeParseException e) {
+        return null;
+      }
+    }
+    return null;
   }
 
   @Override
   public Expression visitTimeConstant(ValueExpressions.TimeExpression timeExpr, Void value) throws RuntimeException {
-    return new ConstantExpression<>(timeExpr.getTime());
+    return new ConstantExpression<>(timeExpr.getTime() * 1000L);
   }
 
   @Override
   public Expression visitTimeStampConstant(ValueExpressions.TimeStampExpression timestampExpr, Void value) throws RuntimeException {
-    return new ConstantExpression<>(timestampExpr.getTimeStamp());
+    try {
+      return new ConstantExpression<>(Math.multiplyExact(timestampExpr.getTimeStamp(), 1000L));
+    } catch (ArithmeticException e) {
+      return null;
+    }
   }
 
   @Override

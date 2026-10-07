@@ -231,6 +231,7 @@ public class Drillbit implements AutoCloseable {
     storageRegistry.init();
     drillbitContext.getOptionManager().init();
     javaPropertiesToSystemOptions();
+    md = manager.startNativeExecution();
     manager.getContext().getRemoteFunctionRegistry().init(context.getConfig(), storeProvider, coord);
     webServer.start();
     //Discovering HTTP port (in case of port hunting)
@@ -240,6 +241,7 @@ public class Drillbit implements AutoCloseable {
       md = md.toBuilder().setHttpPort(httpPort).build();
     }
     registrationHandle = coord.register(md);
+    manager.setNativeFailureHandler(this::disableNativeExecution);
     // Must start the RM after the above since it needs to read system options.
     drillbitContext.startRM();
 
@@ -247,6 +249,22 @@ public class Drillbit implements AutoCloseable {
     Runtime.getRuntime().addShutdownHook(shutdownHook);
     gracefulShutdownThread.start();
     logger.info("Startup completed in {} ms and running on port: {}", w.elapsed(TimeUnit.MILLISECONDS), httpPort);
+  }
+
+  /** Withdraw the capability on this registration while preserving Java services. */
+  public synchronized void disableNativeExecution(String reason) {
+    if (registrationHandle == null || !manager.getContext().getEndpoint().hasNativeExecution()) {
+      return;
+    }
+    var endpoint = manager.getContext().getEndpoint().toBuilder().clearNativeExecution().build();
+    try {
+      coord.update(registrationHandle, endpoint.toBuilder().setState(registrationHandle.getEndPoint().getState()).build());
+      manager.getContext().setNativeEndpoint(endpoint);
+      manager.disableNativeExecution(reason);
+    } catch (Exception error) {
+      logger.error("Could not withdraw native execution capability", error);
+      throw new IllegalStateException(error);
+    }
   }
 
   /**
@@ -291,6 +309,7 @@ public class Drillbit implements AutoCloseable {
       }
     }
     updateState(State.QUIESCENT);
+    manager.quiesceNative();
     stateManager.setState(DrillbitState.GRACE);
     waitForGracePeriod();
     stateManager.setState(DrillbitState.DRAINING);

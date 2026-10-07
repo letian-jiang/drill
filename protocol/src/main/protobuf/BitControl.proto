@@ -74,6 +74,23 @@ message FragmentStatus {
 
 message InitializeFragments {
   repeated PlanFragment fragment = 1;
+  optional NativeExecutionContext native_execution = 2;
+}
+
+// Frozen transport routes. Assignments and fragment_json retain logical node identity.
+message NativeExecutionContext {
+  optional FragmentHandle root = 1;
+  repeated FragmentExecutionRoute route = 2;
+}
+
+message FragmentExecutionRoute {
+  optional FragmentHandle handle = 1;
+  optional DrillbitEndpoint assignment = 2;
+  enum Backend { JAVA = 0; NATIVE = 1; }
+  optional Backend backend = 3;
+  optional string address = 4;
+  optional int32 control_port = 5;
+  optional int32 data_port = 6;
 }
 
 message CustomMessage {

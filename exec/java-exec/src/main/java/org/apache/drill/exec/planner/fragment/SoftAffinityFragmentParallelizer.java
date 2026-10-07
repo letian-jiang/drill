@@ -82,7 +82,12 @@ public class SoftAffinityFragmentParallelizer implements FragmentParallelizer {
     fragmentWrapper.setWidth(width);
 
     final List<DrillbitEndpoint> assignedEndpoints = findEndpoints(activeEndpoints,
-        parallelizationInfo.getEndpointAffinityMap(), fragmentWrapper.getWidth(), parameters);
+        parameters.enforceEndpointCandidates()
+            ? parallelizationInfo.getEndpointAffinityMap().entrySet().stream()
+                .filter(entry -> activeEndpoints.stream().anyMatch(ep -> FragmentEndpointPolicy.sameNode(ep, entry.getKey())))
+                .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey, java.util.Map.Entry::getValue))
+            : parallelizationInfo.getEndpointAffinityMap(),
+        fragmentWrapper.getWidth(), parameters);
 
     fragmentWrapper.assignEndpoints(assignedEndpoints);
   }

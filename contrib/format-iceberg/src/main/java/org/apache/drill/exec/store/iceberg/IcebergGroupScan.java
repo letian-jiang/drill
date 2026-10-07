@@ -120,8 +120,15 @@ public class IcebergGroupScan extends AbstractGroupScan {
   }
 
   public static TableScan initTableScan(IcebergFormatPlugin formatPlugin, String path, LogicalExpression condition) {
-    TableScan tableScan = new HadoopTables(formatPlugin.getFsConf()).load(path).newScan();
-    Map<String, String> properties = formatPlugin.getConfig().getProperties();
+    return initTableScan(formatPlugin.getFsConf(), formatPlugin.getConfig(), path, condition);
+  }
+
+  /** Reader resources without requiring a Drillbit-backed format plugin. */
+  public static TableScan initTableScan(org.apache.hadoop.conf.Configuration fs,
+      org.apache.drill.exec.store.iceberg.format.IcebergFormatPluginConfig config,
+      String path, LogicalExpression condition) {
+    TableScan tableScan = new HadoopTables(fs).load(path).newScan();
+    Map<String, String> properties = config.getProperties();
     if (properties != null) {
       for (Map.Entry<String, String> entry : properties.entrySet()) {
         tableScan = tableScan.option(entry.getKey(), entry.getValue());
@@ -132,19 +139,19 @@ public class IcebergGroupScan extends AbstractGroupScan {
         DrillExprToIcebergTranslator.INSTANCE, null);
       tableScan = tableScan.filter(expression);
     }
-    Snapshot snapshot = formatPlugin.getConfig().getSnapshot();
+    Snapshot snapshot = config.getSnapshot();
     if (snapshot != null) {
       tableScan = snapshot.apply(tableScan);
     }
-    Boolean caseSensitive = formatPlugin.getConfig().getCaseSensitive();
+    Boolean caseSensitive = config.getCaseSensitive();
     if (caseSensitive != null) {
       tableScan = tableScan.caseSensitive(caseSensitive);
     }
-    Boolean includeColumnStats = formatPlugin.getConfig().getIncludeColumnStats();
+    Boolean includeColumnStats = config.getIncludeColumnStats();
     if (includeColumnStats != null && includeColumnStats) {
       tableScan = tableScan.includeColumnStats();
     }
-    Boolean ignoreResiduals = formatPlugin.getConfig().getIgnoreResiduals();
+    Boolean ignoreResiduals = config.getIgnoreResiduals();
     if (ignoreResiduals != null && ignoreResiduals) {
       tableScan = tableScan.ignoreResiduals();
     }
@@ -262,12 +269,20 @@ public class IcebergGroupScan extends AbstractGroupScan {
 
   @Override
   public ScanStats getScanStats() {
-    int expectedRecordsPerChunk = 1_000_000;
+    // File metadata distinguishes small dimension tables from large facts.
+    // Weight split tasks by bytes so a split file is not counted repeatedly.
+    double estimatedRecords = estimateRecords(chunks);
     if (maxRecords >= 0) {
-      expectedRecordsPerChunk = Math.max(maxRecords, 1);
+      estimatedRecords = Math.min(estimatedRecords, Math.max(maxRecords, 1));
     }
-    int estimatedRecords = chunks.size() * expectedRecordsPerChunk;
     return new ScanStats(ScanStats.GroupScanProperty.NO_EXACT_ROW_COUNT, estimatedRecords, 1, 0);
+  }
+
+  static double estimateRecords(List<IcebergCompleteWork> chunks) {
+    return chunks.stream().flatMap(chunk -> chunk.getScanTask().files().stream())
+      .mapToDouble(task -> task.file().recordCount() *
+        ((double) task.length() / Math.max(1L, task.file().fileSizeInBytes())))
+      .sum();
   }
 
   @Override
@@ -288,11 +303,28 @@ public class IcebergGroupScan extends AbstractGroupScan {
       .anyMatch(SchemaPath::isDynamicStar);
     if (!hasStar) {
       List<String> projectColumns = columns.stream()
-        .map(IcebergGroupScan::getPath)
+        .map(column -> getProjectionPath(tableScan, column))
+        .distinct()
         .collect(Collectors.toList());
       return tableScan.select(projectColumns);
     }
     return tableScan;
+  }
+
+  private static String getProjectionPath(TableScan tableScan, SchemaPath column) {
+    PathSegment segment = column.getRootSegment();
+    String path = segment.getNameSegment().getPath();
+    org.apache.iceberg.types.Type type = tableScan.schema().findType(path);
+    while ((segment = segment.getChild()) != null && type != null) {
+      // Drill DICT paths address a key, not an Iceberg schema field. Preserve
+      // the map's key/value columns and let the Project operator do lookup.
+      if (type.isMapType()) {
+        return path;
+      }
+      path += "." + (segment.isNamed() ? segment.getNameSegment().getPath() : "element");
+      type = tableScan.schema().findType(path);
+    }
+    return getPath(column);
   }
 
   public static String getPath(SchemaPath schemaPath) {

@@ -19,6 +19,7 @@ package org.apache.drill.exec.store.paimon.plan;
 
 import org.apache.drill.common.FunctionNames;
 import org.apache.drill.common.expression.FunctionCall;
+import org.apache.drill.common.expression.CastExpression;
 import org.apache.drill.common.expression.LogicalExpression;
 import org.apache.drill.common.expression.NullExpression;
 import org.apache.drill.common.expression.PathSegment;
@@ -33,9 +34,12 @@ import org.apache.paimon.types.DataField;
 import org.apache.paimon.types.RowType;
 
 import java.math.BigDecimal;
-import java.sql.Date;
-import java.sql.Time;
-import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.ZoneOffset;
+
 import java.util.Optional;
 
 public class DrillExprToPaimonTranslator
@@ -190,17 +194,49 @@ public class DrillExprToPaimonTranslator
 
   @Override
   public Object visitDateConstant(ValueExpressions.DateExpression dateExpr, Context context) {
-    return new LiteralValue(new Date(dateExpr.getDate()));
+    return new LiteralValue(LocalDate.ofEpochDay(Math.floorDiv(dateExpr.getDate(), 86400000L)));
   }
 
   @Override
   public Object visitTimeConstant(ValueExpressions.TimeExpression timeExpr, Context context) {
-    return new LiteralValue(new Time(timeExpr.getTime()));
+    return new LiteralValue(LocalTime.ofNanoOfDay(timeExpr.getTime() * 1000000L));
   }
 
   @Override
   public Object visitTimeStampConstant(ValueExpressions.TimeStampExpression timestampExpr, Context context) {
-    return new LiteralValue(new Timestamp(timestampExpr.getTimeStamp()));
+    return new LiteralValue(LocalDateTime.ofInstant(Instant.ofEpochMilli(timestampExpr.getTimeStamp()), ZoneOffset.UTC));
+  }
+
+  @Override
+  public Object visitCastExpression(CastExpression cast, Context context) {
+    Object input = cast.getInput().accept(this, context);
+    if (!(input instanceof LiteralValue)) { return null; }
+    Object value = ((LiteralValue) input).value();
+    if (value == null) { return new LiteralValue(null); }
+    try {
+      switch (cast.getMajorType().getMinorType()) {
+        case DATE:
+          return new LiteralValue(value instanceof Number
+            ? LocalDate.ofEpochDay(Math.floorDiv(((Number) value).longValue(), 86400000L))
+            : value instanceof LocalDate ? value : LocalDate.parse(value.toString()));
+        case TIME:
+          return new LiteralValue(value instanceof Number
+            ? LocalTime.ofNanoOfDay(((Number) value).longValue() * 1000000L)
+            : value instanceof LocalTime ? value : LocalTime.parse(value.toString()));
+        case TIMESTAMP:
+          return new LiteralValue(value instanceof Number
+            ? LocalDateTime.ofInstant(Instant.ofEpochMilli(((Number) value).longValue()), ZoneOffset.UTC)
+            : value instanceof LocalDateTime ? value : LocalDateTime.parse(value.toString().replace(' ', 'T')));
+        case VARDECIMAL:
+          BigDecimal decimal = new BigDecimal(value.toString())
+            .setScale(cast.getMajorType().getScale(), java.math.RoundingMode.HALF_UP);
+          return decimal.precision() <= cast.getMajorType().getPrecision() ? new LiteralValue(decimal) : null;
+        default:
+          return null;
+      }
+    } catch (RuntimeException invalidLiteral) {
+      return null;
+    }
   }
 
   @Override

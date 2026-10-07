@@ -26,6 +26,9 @@ import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.util.Util;
 import org.apache.drill.common.expression.LogicalExpression;
+import org.apache.drill.common.expression.BooleanOperator;
+import org.apache.drill.common.expression.ExpressionPosition;
+import org.apache.drill.common.FunctionNames;
 import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.exec.physical.base.GroupScan;
 import org.apache.drill.exec.planner.common.DrillLimitRelBase;
@@ -66,6 +69,13 @@ public class PaimonPluginImplementor extends AbstractPluginImplementor {
       new DrillParseContext(PrelUtil.getPlannerSettings(filter.getCluster().getPlanner())),
       filter.getInput(),
       condition);
+    // A later filter (for example join IS NOT NULL) must retain earlier
+    // pushed predicates rather than replace them.
+    LogicalExpression previous = groupScan.getCondition();
+    if (previous != null) {
+      expression = new BooleanOperator(FunctionNames.AND,
+        List.of(previous, expression), ExpressionPosition.UNKNOWN);
+    }
     groupScan = groupScan.toBuilder().condition(expression).build();
   }
 

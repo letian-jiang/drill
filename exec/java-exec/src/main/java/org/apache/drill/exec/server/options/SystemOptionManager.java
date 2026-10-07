@@ -82,6 +82,11 @@ public class SystemOptionManager extends BaseOptionManager implements AutoClosea
     // here.
     @SuppressWarnings("deprecation")
     final OptionDefinition[] definitions = new OptionDefinition[]{
+      new OptionDefinition(ExecConstants.FOREMAN_ROOT_ONLY),
+      new OptionDefinition(ExecConstants.NATIVE_FRAGMENT_STRICT),
+      new OptionDefinition(ExecConstants.NATIVE_SCAN_ENABLED),
+      new OptionDefinition(ExecConstants.NATIVE_SCAN_BATCH_RECORDS),
+      new OptionDefinition(ExecConstants.NATIVE_FRAGMENT_ENABLED),
       new OptionDefinition(PlannerSettings.CONSTANT_FOLDING),
       new OptionDefinition(PlannerSettings.EXCHANGE),
       new OptionDefinition(PlannerSettings.HASHAGG),

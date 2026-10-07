@@ -77,6 +77,9 @@ public abstract class SimpleParallelizer implements QueryParallelizer {
   private final int maxGlobalWidth;
   private final double affinityFactor;
   private boolean enableDynamicFC;
+  private boolean foremanRootOnly;
+  private List<DrillbitEndpoint> nativePlacementCandidates;
+  private DrillbitEndpoint foremanEndpoint;
 
   protected SimpleParallelizer(QueryContext context) {
     OptionManager optionManager = context.getOptions();
@@ -89,6 +92,8 @@ public abstract class SimpleParallelizer implements QueryParallelizer {
     this.maxGlobalWidth = optionManager.getOption(ExecConstants.MAX_WIDTH_GLOBAL_KEY).num_val.intValue();
     this.affinityFactor = optionManager.getOption(ExecConstants.AFFINITY_FACTOR_KEY).float_val.intValue();
     this.enableDynamicFC = optionManager.getBoolean(ExecConstants.ENABLE_DYNAMIC_CREDIT_BASED_FC);
+    this.foremanRootOnly = optionManager.getBoolean(ExecConstants.FOREMAN_ROOT_ONLY.getOptionName());
+    this.foremanEndpoint = context.getCurrentEndpoint();
   }
 
   protected SimpleParallelizer(long parallelizationThreshold, int maxWidthPerNode, int maxGlobalWidth, double affinityFactor) {
@@ -116,6 +121,11 @@ public abstract class SimpleParallelizer implements QueryParallelizer {
   @Override
   public double getAffinityFactor() {
     return affinityFactor;
+  }
+
+  @Override
+  public boolean enforceEndpointCandidates() {
+    return foremanRootOnly;
   }
 
   public Set<Wrapper> getRootFragments(PlanningSet planningSet) {
@@ -172,10 +182,22 @@ public abstract class SimpleParallelizer implements QueryParallelizer {
           return;
         }
         fragmentWrapper.getNode().getRoot().accept(new StatsCollector(planningSet), fragmentWrapper);
+        Collection<DrillbitEndpoint> candidates = activeEndpoints;
+        if (nativePlacementCandidates != null) {
+          candidates = fragmentWrapper == planningSet.getRootWrapper()
+              ? List.of(foremanEndpoint) : nativePlacementCandidates;
+          FragmentEndpointPolicy.validateAffinities(
+              candidates, fragmentWrapper.getStats().getParallelizationInfo().getEndpointAffinityMap());
+        } else if (foremanRootOnly) {
+          candidates = FragmentEndpointPolicy.candidates(
+              activeEndpoints, foremanEndpoint, fragmentWrapper == planningSet.getRootWrapper());
+          FragmentEndpointPolicy.validateAffinities(
+              candidates, fragmentWrapper.getStats().getParallelizationInfo().getEndpointAffinityMap());
+        }
         fragmentWrapper.getStats()
                        .getDistributionAffinity()
                        .getFragmentParallelizer()
-                       .parallelizeFragment(fragmentWrapper, this, activeEndpoints);
+                       .parallelizeFragment(fragmentWrapper, this, candidates);
         //consolidate the cpu resources required by this major fragment per drillbit.
         fragmentWrapper.computeCpuResources();
       }));
@@ -211,7 +233,23 @@ public abstract class SimpleParallelizer implements QueryParallelizer {
                                               Collection<DrillbitEndpoint> activeEndpoints, Fragment rootFragment,
                                               UserSession session, QueryContextInformation queryContextInfo) throws ExecutionSetupException {
     PlanningSet planningSet = prepareFragmentTree(rootFragment);
-
+    // Session commands and other root-only plans need no remote execution endpoint.
+    boolean hasRemoteFragments = java.util.stream.StreamSupport.stream(planningSet.spliterator(), false)
+        .anyMatch(wrapper -> wrapper.getNode() != rootFragment);
+    boolean nativeExecution = options.stream().anyMatch(option ->
+        (option.name.equals(ExecConstants.NATIVE_FRAGMENT_STRICT.getOptionName())
+            || option.name.equals(ExecConstants.NATIVE_FRAGMENT_ENABLED.getOptionName())) && option.bool_val);
+    nativePlacementCandidates = null;
+    if (hasRemoteFragments && nativeExecution) {
+      nativePlacementCandidates = FragmentEndpointPolicy.nativeCandidates(activeEndpoints, foremanNode);
+      if (foremanRootOnly) {
+        nativePlacementCandidates = FragmentEndpointPolicy.candidates(nativePlacementCandidates, foremanNode, false);
+      }
+      List<DrillbitEndpoint> nativeEndpoints = new java.util.ArrayList<>();
+      nativeEndpoints.add(foremanNode);
+      nativeEndpoints.addAll(nativePlacementCandidates);
+      activeEndpoints = nativeEndpoints.stream().distinct().toList();
+    }
     Set<Wrapper> rootFragments = getRootFragments(planningSet);
 
     collectStatsAndParallelizeFragments(planningSet, rootFragments, activeEndpoints);

@@ -257,8 +257,9 @@ public class UnorderedReceiverBatch implements CloseableRecordBatch {
               .setReceiver(context.getHandle())
               .setSender(sender)
               .build();
-      context.getController()
-        .getTunnel(providingEndpoint.getEndpoint())
+      (org.apache.drill.exec.nativeexecution.NativeExecutionRoutes.enabled(context.getOptions())
+          ? context.getController().getNativeTunnel(providingEndpoint.getEndpoint())
+          : context.getController().getTunnel(providingEndpoint.getEndpoint()))
         .informReceiverFinished(new OutcomeListener(), finishedReceiver);
     }
   }

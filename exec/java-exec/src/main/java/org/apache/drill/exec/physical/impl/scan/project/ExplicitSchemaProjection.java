@@ -91,6 +91,12 @@ public class ExplicitSchemaProjection extends ReaderLevelProjection {
 
   private void resolveTableColumn(ResolvedTuple outputTuple,
       RequestedColumn requestedCol, ColumnMetadata column, int sourceIndex) {
+    // DICT children are key/value vectors, not the names in a lookup path.
+    // Keep their original names and shape; Project performs the key lookup.
+    if (column.isDict()) {
+      projectTableColumn(outputTuple, requestedCol, column, sourceIndex);
+      return;
+    }
     // Is the requested column implied to be a map?
     // A requested column is a map if the user requests x.y and we
     // are resolving column x. The presence of y as a member implies

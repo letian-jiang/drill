@@ -37,6 +37,8 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -65,14 +67,20 @@ public class IcebergColumnConverterFactory extends ColumnConverterFactory {
     switch (readerSchema.type()) {
       case BIT:
         return new ColumnConverter.ScalarColumnConverter(value -> writer.setBoolean((Boolean) value));
+      case TIME:
+        return new ColumnConverter.ScalarColumnConverter(value -> writer.setTime(
+            value instanceof LocalTime ? (LocalTime) value
+                : LocalTime.ofNanoOfDay(Math.multiplyExact((Long) value, 1000L))));
       case TIMESTAMP:
         return new ColumnConverter.ScalarColumnConverter(value -> {
           Instant instant;
           if (value instanceof LocalDateTime) {
             LocalDateTime dateTime = (LocalDateTime) value;
             instant = dateTime.toInstant(ZoneOffset.UTC);
+          } else if (value instanceof OffsetDateTime) {
+            instant = ((OffsetDateTime) value).toInstant();
           } else {
-            instant = Instant.ofEpochMilli((Long) value / 1000);
+            instant = Instant.ofEpochMilli(Math.floorDiv((Long) value, 1000));
           }
           writer.setTimestamp(instant);
         });
@@ -82,8 +90,9 @@ public class IcebergColumnConverterFactory extends ColumnConverterFactory {
         return new ColumnConverter.ScalarColumnConverter(value -> {
           byte[] bytes;
           if (value instanceof ByteBuffer) {
-            ByteBuffer byteBuf = (ByteBuffer) value;
-            bytes = byteBuf.array();
+            ByteBuffer byteBuf = ((ByteBuffer) value).duplicate();
+            bytes = new byte[byteBuf.remaining()];
+            byteBuf.get(bytes);
           } else {
             bytes = (byte[]) value;
           }

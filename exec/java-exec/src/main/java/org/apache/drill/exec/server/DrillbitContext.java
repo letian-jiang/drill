@@ -65,7 +65,7 @@ public class DrillbitContext implements AutoCloseable {
   private final PhysicalPlanReader reader;
   private final ClusterCoordinator coord;
   private final DataConnectionCreator connectionsPool;
-  private final DrillbitEndpoint endpoint;
+  private volatile DrillbitEndpoint endpoint;
   private final StoragePluginRegistry storagePlugins;
   private final AliasRegistryProvider aliasRegistryProvider;
   private final OAuthTokenProvider oAuthTokenProvider;
@@ -85,6 +85,40 @@ public class DrillbitContext implements AutoCloseable {
   private final MetastoreRegistry metastoreRegistry;
   private final DrillCounters counters;
   private final DaffodilSchemaProvider daffodilSchemaProvider;
+
+  /**
+   * Constructor for a plugin service facade. It starts no Drillbit services.
+   * The subclass supplies scan resources and rejects node execution/RPC APIs.
+   * Existing plugin constructors require this concrete type, so the facade
+   * preserves their ABI without constructing a Java worker.
+   */
+  protected DrillbitContext(boolean scanServicesOnly) {
+    if (!scanServicesOnly) {
+      throw new IllegalArgumentException("Use the normal DrillbitContext constructor for a Java node");
+    }
+    context = null;
+    reader = null;
+    coord = null;
+    connectionsPool = null;
+    endpoint = null;
+    storagePlugins = null;
+    aliasRegistryProvider = null;
+    oAuthTokenProvider = null;
+    operatorCreatorRegistry = null;
+    controller = null;
+    workBus = null;
+    functionRegistry = null;
+    systemOptions = null;
+    provider = null;
+    compiler = null;
+    classpathScan = null;
+    lpPersistence = null;
+    table = null;
+    profileStoreContext = null;
+    metastoreRegistry = null;
+    counters = null;
+    daffodilSchemaProvider = null;
+  }
 
   public DrillbitContext(
       DrillbitEndpoint endpoint,
@@ -171,6 +205,15 @@ public class DrillbitContext implements AutoCloseable {
    */
   public SystemOptionManager getOptionManager() {
     return systemOptions;
+  }
+
+  /** Startup publication preserves the canonical Java address and ports. */
+  public void setNativeEndpoint(DrillbitEndpoint endpoint) {
+    if (!org.apache.drill.exec.planner.fragment.FragmentEndpointPolicy.sameNode(this.endpoint, endpoint)
+        || this.endpoint.getDataPort() != endpoint.getDataPort()) {
+      throw new IllegalArgumentException("Native capability cannot change Drillbit identity");
+    }
+    this.endpoint = endpoint;
   }
 
   public DrillbitEndpoint getEndpoint() {

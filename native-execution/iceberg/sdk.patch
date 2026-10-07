@@ -1,0 +1,21 @@
+diff --git a/src/iceberg/parquet/parquet_reader.cc b/src/iceberg/parquet/parquet_reader.cc
+index 1f81461..bdc8ce2 100644
+--- a/src/iceberg/parquet/parquet_reader.cc
++++ b/src/iceberg/parquet/parquet_reader.cc
+@@ -396,7 +396,15 @@ class ParquetReader::Impl {
+     if (split_.has_value()) {
+       auto metadata = reader_->parquet_reader()->metadata();
+       for (int i = 0; i < metadata->num_row_groups(); ++i) {
+-        auto row_group_offset = metadata->RowGroup(i)->file_offset();
++        // Match Iceberg's Parquet split offsets: the first physical column's
++        // first page. RowGroup.file_offset is optional and often zero in
++        // files produced by Arrow, so it cannot define split ownership.
++        auto first_column = metadata->RowGroup(i)->ColumnChunk(0);
++        auto row_group_offset = first_column->data_page_offset();
++        if (first_column->has_dictionary_page()) {
++          row_group_offset = std::min(row_group_offset,
++                                      first_column->dictionary_page_offset());
++        }
+         if (row_group_offset >= split_->offset &&
+             row_group_offset < split_->offset + split_->length) {
+           row_group_indices.push_back(i);

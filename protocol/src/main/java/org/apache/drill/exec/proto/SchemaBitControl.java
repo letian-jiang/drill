@@ -30,7 +30,7 @@ public final class SchemaBitControl
             new org.apache.drill.exec.proto.SchemaBitControl.BitControlHandshake.MessageSchema();
         public static final org.apache.drill.exec.proto.SchemaBitControl.BitControlHandshake.BuilderSchema MERGE =
             new org.apache.drill.exec.proto.SchemaBitControl.BitControlHandshake.BuilderSchema();
-        
+
         public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.BitControl.BitControlHandshake>
         {
             public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.BitControl.BitControlHandshake message) throws java.io.IOException
@@ -164,7 +164,7 @@ public final class SchemaBitControl
             new org.apache.drill.exec.proto.SchemaBitControl.BitStatus.MessageSchema();
         public static final org.apache.drill.exec.proto.SchemaBitControl.BitStatus.BuilderSchema MERGE =
             new org.apache.drill.exec.proto.SchemaBitControl.BitStatus.BuilderSchema();
-        
+
         public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.BitControl.BitStatus>
         {
             public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.BitControl.BitStatus message) throws java.io.IOException
@@ -277,7 +277,7 @@ public final class SchemaBitControl
             new org.apache.drill.exec.proto.SchemaBitControl.FragmentStatus.MessageSchema();
         public static final org.apache.drill.exec.proto.SchemaBitControl.FragmentStatus.BuilderSchema MERGE =
             new org.apache.drill.exec.proto.SchemaBitControl.FragmentStatus.BuilderSchema();
-        
+
         public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.BitControl.FragmentStatus>
         {
             public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.BitControl.FragmentStatus message) throws java.io.IOException
@@ -399,13 +399,16 @@ public final class SchemaBitControl
             new org.apache.drill.exec.proto.SchemaBitControl.InitializeFragments.MessageSchema();
         public static final org.apache.drill.exec.proto.SchemaBitControl.InitializeFragments.BuilderSchema MERGE =
             new org.apache.drill.exec.proto.SchemaBitControl.InitializeFragments.BuilderSchema();
-        
+
         public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.BitControl.InitializeFragments>
         {
             public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.BitControl.InitializeFragments message) throws java.io.IOException
             {
                 for(org.apache.drill.exec.proto.BitControl.PlanFragment fragment : message.getFragmentList())
                     output.writeObject(1, fragment, org.apache.drill.exec.proto.SchemaBitControl.PlanFragment.WRITE, true);
+
+                if(message.hasNativeExecution())
+                    output.writeObject(2, message.getNativeExecution(), org.apache.drill.exec.proto.SchemaBitControl.NativeExecutionContext.WRITE, false);
 
             }
             public boolean isInitialized(org.apache.drill.exec.proto.BitControl.InitializeFragments message)
@@ -450,6 +453,10 @@ public final class SchemaBitControl
                             builder.addFragment(input.mergeObject(org.apache.drill.exec.proto.BitControl.PlanFragment.newBuilder(), org.apache.drill.exec.proto.SchemaBitControl.PlanFragment.MERGE));
 
                             break;
+                        case 2:
+                            builder.setNativeExecution(input.mergeObject(org.apache.drill.exec.proto.BitControl.NativeExecutionContext.newBuilder(), org.apache.drill.exec.proto.SchemaBitControl.NativeExecutionContext.MERGE));
+
+                            break;
                         default:
                             input.handleUnknownField(number, this);
                     }
@@ -491,6 +498,7 @@ public final class SchemaBitControl
             switch(number)
             {
                 case 1: return "fragment";
+                case 2: return "nativeExecution";
                 default: return null;
             }
         }
@@ -503,6 +511,279 @@ public final class SchemaBitControl
         static
         {
             fieldMap.put("fragment", 1);
+            fieldMap.put("nativeExecution", 2);
+        }
+    }
+
+    public static final class NativeExecutionContext
+    {
+        public static final org.apache.drill.exec.proto.SchemaBitControl.NativeExecutionContext.MessageSchema WRITE =
+            new org.apache.drill.exec.proto.SchemaBitControl.NativeExecutionContext.MessageSchema();
+        public static final org.apache.drill.exec.proto.SchemaBitControl.NativeExecutionContext.BuilderSchema MERGE =
+            new org.apache.drill.exec.proto.SchemaBitControl.NativeExecutionContext.BuilderSchema();
+
+        public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.BitControl.NativeExecutionContext>
+        {
+            public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.BitControl.NativeExecutionContext message) throws java.io.IOException
+            {
+                if(message.hasRoot())
+                    output.writeObject(1, message.getRoot(), org.apache.drill.exec.proto.SchemaExecProtos.FragmentHandle.WRITE, false);
+
+                for(org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute route : message.getRouteList())
+                    output.writeObject(2, route, org.apache.drill.exec.proto.SchemaBitControl.FragmentExecutionRoute.WRITE, true);
+
+            }
+            public boolean isInitialized(org.apache.drill.exec.proto.BitControl.NativeExecutionContext message)
+            {
+                return message.isInitialized();
+            }
+            public java.lang.String getFieldName(int number)
+            {
+                return org.apache.drill.exec.proto.SchemaBitControl.NativeExecutionContext.getFieldName(number);
+            }
+            public int getFieldNumber(java.lang.String name)
+            {
+                return org.apache.drill.exec.proto.SchemaBitControl.NativeExecutionContext.getFieldNumber(name);
+            }
+            public java.lang.Class<org.apache.drill.exec.proto.BitControl.NativeExecutionContext> typeClass()
+            {
+                return org.apache.drill.exec.proto.BitControl.NativeExecutionContext.class;
+            }
+            public java.lang.String messageName()
+            {
+                return org.apache.drill.exec.proto.BitControl.NativeExecutionContext.class.getSimpleName();
+            }
+            public java.lang.String messageFullName()
+            {
+                return org.apache.drill.exec.proto.BitControl.NativeExecutionContext.class.getName();
+            }
+            //unused
+            public void mergeFrom(io.protostuff.Input input, org.apache.drill.exec.proto.BitControl.NativeExecutionContext message) throws java.io.IOException {}
+            public org.apache.drill.exec.proto.BitControl.NativeExecutionContext newMessage() { return null; }
+        }
+        public static class BuilderSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.BitControl.NativeExecutionContext.Builder>
+        {
+            public void mergeFrom(io.protostuff.Input input, org.apache.drill.exec.proto.BitControl.NativeExecutionContext.Builder builder) throws java.io.IOException
+            {
+                for(int number = input.readFieldNumber(this);; number = input.readFieldNumber(this))
+                {
+                    switch(number)
+                    {
+                        case 0:
+                            return;
+                        case 1:
+                            builder.setRoot(input.mergeObject(org.apache.drill.exec.proto.ExecProtos.FragmentHandle.newBuilder(), org.apache.drill.exec.proto.SchemaExecProtos.FragmentHandle.MERGE));
+
+                            break;
+                        case 2:
+                            builder.addRoute(input.mergeObject(org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.newBuilder(), org.apache.drill.exec.proto.SchemaBitControl.FragmentExecutionRoute.MERGE));
+
+                            break;
+                        default:
+                            input.handleUnknownField(number, this);
+                    }
+                }
+            }
+            public boolean isInitialized(org.apache.drill.exec.proto.BitControl.NativeExecutionContext.Builder builder)
+            {
+                return builder.isInitialized();
+            }
+            public org.apache.drill.exec.proto.BitControl.NativeExecutionContext.Builder newMessage()
+            {
+                return org.apache.drill.exec.proto.BitControl.NativeExecutionContext.newBuilder();
+            }
+            public java.lang.String getFieldName(int number)
+            {
+                return org.apache.drill.exec.proto.SchemaBitControl.NativeExecutionContext.getFieldName(number);
+            }
+            public int getFieldNumber(java.lang.String name)
+            {
+                return org.apache.drill.exec.proto.SchemaBitControl.NativeExecutionContext.getFieldNumber(name);
+            }
+            public java.lang.Class<org.apache.drill.exec.proto.BitControl.NativeExecutionContext.Builder> typeClass()
+            {
+                return org.apache.drill.exec.proto.BitControl.NativeExecutionContext.Builder.class;
+            }
+            public java.lang.String messageName()
+            {
+                return org.apache.drill.exec.proto.BitControl.NativeExecutionContext.class.getSimpleName();
+            }
+            public java.lang.String messageFullName()
+            {
+                return org.apache.drill.exec.proto.BitControl.NativeExecutionContext.class.getName();
+            }
+            //unused
+            public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.BitControl.NativeExecutionContext.Builder builder) throws java.io.IOException {}
+        }
+        public static java.lang.String getFieldName(int number)
+        {
+            switch(number)
+            {
+                case 1: return "root";
+                case 2: return "route";
+                default: return null;
+            }
+        }
+        public static int getFieldNumber(java.lang.String name)
+        {
+            java.lang.Integer number = fieldMap.get(name);
+            return number == null ? 0 : number.intValue();
+        }
+        private static final java.util.HashMap<java.lang.String,java.lang.Integer> fieldMap = new java.util.HashMap<java.lang.String,java.lang.Integer>();
+        static
+        {
+            fieldMap.put("root", 1);
+            fieldMap.put("route", 2);
+        }
+    }
+
+    public static final class FragmentExecutionRoute
+    {
+        public static final org.apache.drill.exec.proto.SchemaBitControl.FragmentExecutionRoute.MessageSchema WRITE =
+            new org.apache.drill.exec.proto.SchemaBitControl.FragmentExecutionRoute.MessageSchema();
+        public static final org.apache.drill.exec.proto.SchemaBitControl.FragmentExecutionRoute.BuilderSchema MERGE =
+            new org.apache.drill.exec.proto.SchemaBitControl.FragmentExecutionRoute.BuilderSchema();
+
+        public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute>
+        {
+            public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute message) throws java.io.IOException
+            {
+                if(message.hasHandle())
+                    output.writeObject(1, message.getHandle(), org.apache.drill.exec.proto.SchemaExecProtos.FragmentHandle.WRITE, false);
+
+                if(message.hasAssignment())
+                    output.writeObject(2, message.getAssignment(), org.apache.drill.exec.proto.SchemaCoordinationProtos.DrillbitEndpoint.WRITE, false);
+
+                if(message.hasBackend())
+                    output.writeEnum(3, message.getBackend().getNumber(), false);
+                if(message.hasAddress())
+                    output.writeString(4, message.getAddress(), false);
+                if(message.hasControlPort())
+                    output.writeInt32(5, message.getControlPort(), false);
+                if(message.hasDataPort())
+                    output.writeInt32(6, message.getDataPort(), false);
+            }
+            public boolean isInitialized(org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute message)
+            {
+                return message.isInitialized();
+            }
+            public java.lang.String getFieldName(int number)
+            {
+                return org.apache.drill.exec.proto.SchemaBitControl.FragmentExecutionRoute.getFieldName(number);
+            }
+            public int getFieldNumber(java.lang.String name)
+            {
+                return org.apache.drill.exec.proto.SchemaBitControl.FragmentExecutionRoute.getFieldNumber(name);
+            }
+            public java.lang.Class<org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute> typeClass()
+            {
+                return org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.class;
+            }
+            public java.lang.String messageName()
+            {
+                return org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.class.getSimpleName();
+            }
+            public java.lang.String messageFullName()
+            {
+                return org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.class.getName();
+            }
+            //unused
+            public void mergeFrom(io.protostuff.Input input, org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute message) throws java.io.IOException {}
+            public org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute newMessage() { return null; }
+        }
+        public static class BuilderSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.Builder>
+        {
+            public void mergeFrom(io.protostuff.Input input, org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.Builder builder) throws java.io.IOException
+            {
+                for(int number = input.readFieldNumber(this);; number = input.readFieldNumber(this))
+                {
+                    switch(number)
+                    {
+                        case 0:
+                            return;
+                        case 1:
+                            builder.setHandle(input.mergeObject(org.apache.drill.exec.proto.ExecProtos.FragmentHandle.newBuilder(), org.apache.drill.exec.proto.SchemaExecProtos.FragmentHandle.MERGE));
+
+                            break;
+                        case 2:
+                            builder.setAssignment(input.mergeObject(org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint.newBuilder(), org.apache.drill.exec.proto.SchemaCoordinationProtos.DrillbitEndpoint.MERGE));
+
+                            break;
+                        case 3:
+                            builder.setBackend(org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.Backend.valueOf(input.readEnum()));
+                            break;
+                        case 4:
+                            builder.setAddress(input.readString());
+                            break;
+                        case 5:
+                            builder.setControlPort(input.readInt32());
+                            break;
+                        case 6:
+                            builder.setDataPort(input.readInt32());
+                            break;
+                        default:
+                            input.handleUnknownField(number, this);
+                    }
+                }
+            }
+            public boolean isInitialized(org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.Builder builder)
+            {
+                return builder.isInitialized();
+            }
+            public org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.Builder newMessage()
+            {
+                return org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.newBuilder();
+            }
+            public java.lang.String getFieldName(int number)
+            {
+                return org.apache.drill.exec.proto.SchemaBitControl.FragmentExecutionRoute.getFieldName(number);
+            }
+            public int getFieldNumber(java.lang.String name)
+            {
+                return org.apache.drill.exec.proto.SchemaBitControl.FragmentExecutionRoute.getFieldNumber(name);
+            }
+            public java.lang.Class<org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.Builder> typeClass()
+            {
+                return org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.Builder.class;
+            }
+            public java.lang.String messageName()
+            {
+                return org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.class.getSimpleName();
+            }
+            public java.lang.String messageFullName()
+            {
+                return org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.class.getName();
+            }
+            //unused
+            public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.BitControl.FragmentExecutionRoute.Builder builder) throws java.io.IOException {}
+        }
+        public static java.lang.String getFieldName(int number)
+        {
+            switch(number)
+            {
+                case 1: return "handle";
+                case 2: return "assignment";
+                case 3: return "backend";
+                case 4: return "address";
+                case 5: return "controlPort";
+                case 6: return "dataPort";
+                default: return null;
+            }
+        }
+        public static int getFieldNumber(java.lang.String name)
+        {
+            java.lang.Integer number = fieldMap.get(name);
+            return number == null ? 0 : number.intValue();
+        }
+        private static final java.util.HashMap<java.lang.String,java.lang.Integer> fieldMap = new java.util.HashMap<java.lang.String,java.lang.Integer>();
+        static
+        {
+            fieldMap.put("handle", 1);
+            fieldMap.put("assignment", 2);
+            fieldMap.put("backend", 3);
+            fieldMap.put("address", 4);
+            fieldMap.put("controlPort", 5);
+            fieldMap.put("dataPort", 6);
         }
     }
 
@@ -512,7 +793,7 @@ public final class SchemaBitControl
             new org.apache.drill.exec.proto.SchemaBitControl.CustomMessage.MessageSchema();
         public static final org.apache.drill.exec.proto.SchemaBitControl.CustomMessage.BuilderSchema MERGE =
             new org.apache.drill.exec.proto.SchemaBitControl.CustomMessage.BuilderSchema();
-        
+
         public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.BitControl.CustomMessage>
         {
             public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.BitControl.CustomMessage message) throws java.io.IOException
@@ -631,7 +912,7 @@ public final class SchemaBitControl
             new org.apache.drill.exec.proto.SchemaBitControl.PlanFragment.MessageSchema();
         public static final org.apache.drill.exec.proto.SchemaBitControl.PlanFragment.BuilderSchema MERGE =
             new org.apache.drill.exec.proto.SchemaBitControl.PlanFragment.BuilderSchema();
-        
+
         public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.BitControl.PlanFragment>
         {
             public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.BitControl.PlanFragment message) throws java.io.IOException
@@ -852,7 +1133,7 @@ public final class SchemaBitControl
             new org.apache.drill.exec.proto.SchemaBitControl.Collector.MessageSchema();
         public static final org.apache.drill.exec.proto.SchemaBitControl.Collector.BuilderSchema MERGE =
             new org.apache.drill.exec.proto.SchemaBitControl.Collector.BuilderSchema();
-        
+
         public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.BitControl.Collector>
         {
             public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.BitControl.Collector message) throws java.io.IOException
@@ -991,7 +1272,7 @@ public final class SchemaBitControl
             new org.apache.drill.exec.proto.SchemaBitControl.QueryContextInformation.MessageSchema();
         public static final org.apache.drill.exec.proto.SchemaBitControl.QueryContextInformation.BuilderSchema MERGE =
             new org.apache.drill.exec.proto.SchemaBitControl.QueryContextInformation.BuilderSchema();
-        
+
         public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.BitControl.QueryContextInformation>
         {
             public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.BitControl.QueryContextInformation message) throws java.io.IOException
@@ -1123,7 +1404,7 @@ public final class SchemaBitControl
             new org.apache.drill.exec.proto.SchemaBitControl.WorkQueueStatus.MessageSchema();
         public static final org.apache.drill.exec.proto.SchemaBitControl.WorkQueueStatus.BuilderSchema MERGE =
             new org.apache.drill.exec.proto.SchemaBitControl.WorkQueueStatus.BuilderSchema();
-        
+
         public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.BitControl.WorkQueueStatus>
         {
             public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.BitControl.WorkQueueStatus message) throws java.io.IOException
@@ -1250,7 +1531,7 @@ public final class SchemaBitControl
             new org.apache.drill.exec.proto.SchemaBitControl.FinishedReceiver.MessageSchema();
         public static final org.apache.drill.exec.proto.SchemaBitControl.FinishedReceiver.BuilderSchema MERGE =
             new org.apache.drill.exec.proto.SchemaBitControl.FinishedReceiver.BuilderSchema();
-        
+
         public static class MessageSchema implements io.protostuff.Schema<org.apache.drill.exec.proto.BitControl.FinishedReceiver>
         {
             public void writeTo(io.protostuff.Output output, org.apache.drill.exec.proto.BitControl.FinishedReceiver message) throws java.io.IOException

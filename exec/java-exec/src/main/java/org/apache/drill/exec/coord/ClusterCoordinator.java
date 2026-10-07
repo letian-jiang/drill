@@ -71,6 +71,24 @@ public abstract class ClusterCoordinator implements AutoCloseable {
 
   public abstract RegistrationHandle update(RegistrationHandle handle, State state);
 
+  /** Replace capabilities on the same service identity and registration. */
+  public RegistrationHandle update(RegistrationHandle handle, DrillbitEndpoint endpoint) {
+    synchronized (handle) {
+      DrillbitEndpoint previous = handle.getEndPoint();
+      if (!previous.getAddress().equals(endpoint.getAddress())
+          || previous.getControlPort() != endpoint.getControlPort()) {
+        throw new IllegalArgumentException("Capability updates cannot change Drillbit identity");
+      }
+      handle.setEndPoint(endpoint);
+      try {
+        return update(handle, endpoint.getState());
+      } catch (RuntimeException error) {
+        handle.setEndPoint(previous);
+        throw error;
+      }
+    }
+  }
+
   public interface RegistrationHandle {
     /**
      * Get the drillbit endpoint associated with the registration handle

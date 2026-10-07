@@ -25,6 +25,7 @@ import org.apache.drill.common.exceptions.EmptyErrorContext;
 import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.apache.drill.exec.ops.FragmentContext;
+import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.ops.OperatorContext;
 import org.apache.drill.exec.physical.base.PhysicalOperator;
 import org.apache.drill.exec.physical.impl.protocol.OperatorDriver;
@@ -94,6 +95,7 @@ public class ScanLifecycleBuilder {
   protected String userName;
   protected MajorType nullType;
   private int scanBatchRecordLimit = DEFAULT_BATCH_ROW_COUNT;
+  private boolean customBatchRecordLimit;
   private int scanBatchByteLimit = DEFAULT_BATCH_BYTE_COUNT;
   protected boolean allowRequiredNullColumns;
   private List<SchemaPath> projection;
@@ -186,6 +188,7 @@ public class ScanLifecycleBuilder {
    * @param batchRecordLimit maximum records per batch
    */
   public void batchRecordLimit(int batchRecordLimit) {
+    customBatchRecordLimit = true;
     scanBatchRecordLimit = Math.max(1,
         Math.min(batchRecordLimit, ValueVector.MAX_ROW_COUNT));
   }
@@ -317,6 +320,10 @@ public class ScanLifecycleBuilder {
   }
 
   public OperatorRecordBatch buildScanOperator(FragmentContext fragContext, PhysicalOperator pop) {
+    if (!customBatchRecordLimit && fragContext.getHandle().getMajorFragmentId() != 0
+        && fragContext.getOptions().getBoolean(ExecConstants.NATIVE_FRAGMENT_ENABLED.getOptionName())) {
+      batchRecordLimit((int) fragContext.getOptions().getLong(ExecConstants.NATIVE_SCAN_BATCH_RECORDS.getOptionName()));
+    }
     return new OperatorRecordBatch(fragContext, pop, buildScan(), enableSchemaBatch);
   }
 }

@@ -30,6 +30,7 @@ public class ConnectionManagerRegistry implements Iterable<ControlConnectionMana
 
   private final ConcurrentMap<DrillbitEndpoint, ControlConnectionManager> registry = Maps.newConcurrentMap();
 
+  private final ConcurrentMap<DrillbitEndpoint, ControlConnectionManager> nativeRegistry = Maps.newConcurrentMap();
   private final ControlConnectionConfig config;
 
   private DrillbitEndpoint localEndpoint;
@@ -56,13 +57,18 @@ public class ConnectionManagerRegistry implements Iterable<ControlConnectionMana
     return m;
   }
 
+  public ControlConnectionManager getNativeConnectionManager(DrillbitEndpoint remoteEndpoint) {
+    return nativeRegistry.computeIfAbsent(remoteEndpoint,
+        endpoint -> new RemoteControlConnectionManager(config, localEndpoint, endpoint));
+  }
+
   void setLocalEndpoint(final DrillbitEndpoint endpoint) {
     this.localEndpoint = endpoint;
   }
 
   @Override
   public Iterator<ControlConnectionManager> iterator() {
-    return registry.values().iterator();
+    return java.util.stream.Stream.concat(registry.values().stream(), nativeRegistry.values().stream()).iterator();
   }
 
 }

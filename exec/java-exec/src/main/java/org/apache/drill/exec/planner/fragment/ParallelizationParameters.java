@@ -41,4 +41,9 @@ public interface ParallelizationParameters {
    * @return Factor by which a node with endpoint affinity will be favored while creating assignment.
    */
   double getAffinityFactor();
+
+  /** Whether affinities must be restricted to the supplied candidate nodes. */
+  default boolean enforceEndpointCandidates() {
+    return false;
+  }
 }

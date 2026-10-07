@@ -44,6 +44,11 @@ public interface Controller extends AutoCloseable {
    */
   public ControlTunnel getTunnel(DrillbitEndpoint node);
 
+  /** Explicit native ingress, including loopback; never a Java local shortcut. */
+  default ControlTunnel getNativeTunnel(DrillbitEndpoint node) {
+    return getTunnel(org.apache.drill.exec.nativeexecution.NativeExecutionRoutes.control(node));
+  }
+
   public DrillbitEndpoint start(DrillbitEndpoint partialEndpoint, boolean allowPortHunting)
       throws DrillbitStartupException;
 

@@ -650,11 +650,11 @@ public class IcebergQueriesTest extends ClusterTest {
   public void testLimitWithFilter() throws Exception {
     String query = "select int_field, string_field from dfs.tmp.testAllTypes where int_field = 1 limit 1";
 
+    // File-level cardinality may make retaining Limit above Scan cheaper than pushdown.
     queryBuilder()
       .sql(query)
       .planMatcher()
       .include("Limit\\(fetch\\=\\[1\\]\\)")
-      .include("maxRecords\\=1")
       .include("filter\\=ref\\(name=\"int_field\"\\) \\=\\= 1")
       .match();
 

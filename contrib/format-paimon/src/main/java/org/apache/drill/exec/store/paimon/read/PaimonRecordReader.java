@@ -51,8 +51,6 @@ import java.util.List;
 public class PaimonRecordReader implements ManagedReader {
   private static final Logger logger = LoggerFactory.getLogger(PaimonRecordReader.class);
 
-  private final PaimonFormatPlugin formatPlugin;
-
   private final String path;
 
   private final List<SchemaPath> columns;
@@ -80,18 +78,25 @@ public class PaimonRecordReader implements ManagedReader {
   public PaimonRecordReader(PaimonFormatPlugin formatPlugin, String path,
     List<SchemaPath> columns, LogicalExpression condition, PaimonWork work, int maxRecords,
     SchemaNegotiator negotiator) {
-    this.formatPlugin = formatPlugin;
+    this(formatPlugin.getFsConf(), formatPlugin.getConfig(), path, columns, condition, work,
+        maxRecords, negotiator);
+  }
+
+  public PaimonRecordReader(org.apache.hadoop.conf.Configuration fsConf,
+      org.apache.drill.exec.store.paimon.format.PaimonFormatPluginConfig formatConfig,
+      String path, List<SchemaPath> columns, LogicalExpression condition, PaimonWork work,
+      int maxRecords, SchemaNegotiator negotiator) {
     this.path = path;
     this.columns = columns;
     this.condition = condition;
     this.work = work;
     this.maxRecords = maxRecords;
     try {
-      Table table = PaimonTableUtils.loadTable(formatPlugin, path);
+      Table table = PaimonTableUtils.loadTable(fsConf, formatConfig, path);
       RowType rowType = table.rowType();
       ReadBuilder readBuilder = table.newReadBuilder();
       PaimonReadUtils.applyFilter(readBuilder, rowType, condition);
-      PaimonReadUtils.applyProjection(readBuilder, rowType, columns);
+      PaimonReadUtils.applyProjection(readBuilder, rowType, columns, condition);
       RowType readType = readBuilder.readType();
 
       TupleSchema tableSchema = PaimonColumnConverterFactory.convertSchema(readType);

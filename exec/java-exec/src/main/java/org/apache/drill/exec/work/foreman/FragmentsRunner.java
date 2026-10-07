@@ -68,6 +68,7 @@ public class FragmentsRunner {
   private List<PlanFragment> planFragments;
   private PlanFragment rootPlanFragment;
   private FragmentRoot rootOperator;
+  private org.apache.drill.exec.proto.BitControl.NativeExecutionContext nativeRoutes;
 
   public FragmentsRunner(WorkerBee bee, UserClientConnection initiatingClient, DrillbitContext drillbitContext, Foreman foreman) {
     this.bee = bee;
@@ -104,6 +105,10 @@ public class FragmentsRunner {
     drillbitContext.getWorkBus().addFragmentStatusListener(queryId, queryManager.getFragmentStatusListener());
     drillbitContext.getClusterCoordinator().addDrillbitStatusListener(queryManager.getDrillbitStatusListener());
 
+    if (org.apache.drill.exec.nativeexecution.NativeExecutionRoutes.enabled(foreman.getQueryContext().getOptions())) {
+      nativeRoutes = org.apache.drill.exec.nativeexecution.NativeExecutionRoutes.freeze(rootPlanFragment, planFragments);
+      foreman.getQueryManager().setNativeRoutes(nativeRoutes);
+    }
     logger.debug("Submitting fragments to run.");
     // set up the root fragment first so we'll have incoming buffers available.
     setupRootFragment(rootPlanFragment, rootOperator);
@@ -215,12 +220,16 @@ public class FragmentsRunner {
     for(final PlanFragment planFragment : fragments) {
       fb.addFragment(planFragment);
     }
+    if (nativeRoutes != null) {
+      fb.setNativeExecution(nativeRoutes);
+    }
     final InitializeFragments initFrags = fb.build();
 
     logger.debug("Sending remote fragments to node: {}\nData: {}", assignment, initFrags);
     final FragmentSubmitListener listener =
         new FragmentSubmitListener(assignment, initFrags, latch, fragmentSubmitFailures);
-    controller.getTunnel(assignment).sendFragments(listener, initFrags);
+    (nativeRoutes == null ? controller.getTunnel(assignment) : controller.getNativeTunnel(assignment))
+        .sendFragments(listener, initFrags);
   }
 
   /**
@@ -347,4 +356,3 @@ public class FragmentsRunner {
     }
   }
 }
-

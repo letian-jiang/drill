@@ -81,6 +81,7 @@ public class WorkManager implements AutoCloseable {
 
   private final BootStrapContext bContext;
   private DrillbitContext dContext;
+  private org.apache.drill.exec.nativeexecution.NativeExecutionService nativeRpcService;
 
   private final ControlMessageHandler controlMessageWorker;
   private final UserWorker userWorker;
@@ -121,6 +122,17 @@ public class WorkManager implements AutoCloseable {
     DrillMetrics.register("drill.fragments.running", (Gauge<Integer>) runningFragments::size);
   }
 
+  /** Called after plugin registry and options init, before the sole ZK registration. */
+  public DrillbitEndpoint startNativeExecution() throws Exception {
+    String library = System.getProperty("drill.native.engine.library");
+    if (library == null || library.isBlank()) {
+      return dContext.getEndpoint();
+    }
+    nativeRpcService = new org.apache.drill.exec.nativeexecution.NativeExecutionService(dContext);
+    dContext.setNativeEndpoint(nativeRpcService.endpoint());
+    return dContext.getEndpoint();
+  }
+
   public Executor getExecutor() {
     return executor;
   }
@@ -144,6 +156,9 @@ public class WorkManager implements AutoCloseable {
   @Override
   public void close() throws Exception {
     statusThread.interrupt();
+    if (nativeRpcService != null) {
+      nativeRpcService.close();
+    }
 
     final long numRunningFragments = runningFragments.size();
     if (numRunningFragments != 0) {
@@ -163,6 +178,27 @@ public class WorkManager implements AutoCloseable {
 
   public DrillbitContext getContext() {
     return dContext;
+  }
+
+  public void setNativeFailureHandler(java.util.function.Consumer<String> handler) {
+    if (nativeRpcService != null) {
+      nativeRpcService.setFailureHandler(handler);
+    }
+  }
+  public void disableNativeExecution(String reason) throws Exception {
+    var service = nativeRpcService;
+    if (service == null) {
+      return;
+    }
+    service.fail(reason);
+    service.awaitIdle(EXIT_TIMEOUT_MS);
+    service.close();
+    nativeRpcService = null;
+  }
+  public void quiesceNative() {
+    if (nativeRpcService != null) {
+      nativeRpcService.quiesce();
+    }
   }
 
   public void waitToExit(final boolean forcefulShutdown) {
@@ -204,6 +240,9 @@ public class WorkManager implements AutoCloseable {
       }
     } finally {
       isEmptyLock.unlock();
+    }
+    if (nativeRpcService != null && !nativeRpcService.awaitIdle(forcefulShutdown ? EXIT_TIMEOUT_MS : 0)) {
+      logger.warn("Native tasks did not finish before forced shutdown");
     }
   }
 

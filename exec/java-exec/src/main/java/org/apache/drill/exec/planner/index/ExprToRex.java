@@ -51,6 +51,13 @@ public class ExprToRex extends AbstractExprVisitor<RexNode, Void, RuntimeExcepti
   }
 
   public static RelDataTypeField findField(String fieldName, RelDataType rowType) {
+    // Literal field names can contain Drill's prefixed dynamic star, which is
+    // not an expression accepted by the SchemaPath parser.
+    for (RelDataTypeField field : rowType.getFieldList()) {
+      if (fieldName.equalsIgnoreCase(field.getName())) {
+        return field;
+      }
+    }
     final String rootPart = SchemaPath.parseFromString(fieldName).getRootSegmentPath();
 
     for (RelDataTypeField f : rowType.getFieldList()) {

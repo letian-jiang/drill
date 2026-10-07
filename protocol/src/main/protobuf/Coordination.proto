@@ -37,6 +37,18 @@ message DrillbitEndpoint{
   }
   optional State state = 7;
   optional int32 http_port = 8;
+  // Published by a Drillbit only after its native control/data listeners are ready.
+  optional NativeExecutionEndpoint native_execution = 9;
+}
+
+message NativeExecutionEndpoint {
+  optional string address = 1;
+  optional int32 port = 2;
+  optional int32 protocol_version = 3;
+  optional bool tls_enabled = 4 [default = false];
+  // Original BitControl/BitData services; port retains its historical meaning.
+  optional int32 control_port = 5;
+  optional int32 data_port = 6;
 }
 
 message DrillServiceInstance{
