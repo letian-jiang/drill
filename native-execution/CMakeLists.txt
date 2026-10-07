@@ -258,12 +258,6 @@ add_test(NAME native_engine_jni COMMAND "${DRILL_NATIVE_JAVA}"
   NativeEngineJniTest "$<TARGET_FILE:drill_native_engine>")
 set_tests_properties(native_engine_jni PROPERTIES TIMEOUT 30)
 
-# Production Java plugin/classpath integration, invoked by run_generic_plugin_rpc.py.
-# Kept separate from the isolated mock-JVM CTests: requires built Drill jars and PyArrow data fixtures.
-add_executable(native_generic_plugin_rpc_test tests/worker/GenericPluginRpcTest.cpp)
-target_link_libraries(native_generic_plugin_rpc_test PRIVATE drill_native_execution)
-set_target_properties(native_generic_plugin_rpc_test PROPERTIES BUILD_RPATH "${DRILL_NATIVE_CACHE}/lib")
-
 add_executable(native_engine_rpc_test tests/execution/NativeEngineRpcTest.cpp)
 target_link_libraries(native_engine_rpc_test PRIVATE drill_native_execution)
 set_target_properties(native_engine_rpc_test PROPERTIES BUILD_RPATH "${DRILL_NATIVE_CACHE}/lib")

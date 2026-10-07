@@ -4,5 +4,3 @@ __pycache__/
 /build/
 
 !/iceberg/sdk.patch
-/benchmark/data/
-/benchmark/runs/

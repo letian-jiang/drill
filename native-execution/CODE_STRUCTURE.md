@@ -28,9 +28,6 @@ native-execution/
     plan/            schema、表达式、Join、Window、TopN 和 partition
     scan/            JNI/Arrow/SDK reader、原 plugin 及复杂类型 fixtures
     worker/          隔离引擎的协议/原 reader 回归，不是独立部署入口
-    test_paths.py    checkout/cache/Maven 位置
-    run_iceberg_integration.py / compare_integration_results.py
-  benchmark/         Java/JNI/SDK comparison、placement 审计、SF 数据生成与 SQL
 ```
 
 Java 节点服务和 scan API 位于 `exec/java-exec/.../nativeexecution/`。原 minor serializer、schema/buffer layout 描述和能力检测仍位于 `physical/impl/velox/`，不依赖 Velox4J。批次复制/重建的 round-trip fixture 位于 Java 测试目录 `NativeColumnarTestSupport`。
@@ -43,3 +40,5 @@ Java 节点服务和 scan API 位于 `exec/java-exec/.../nativeexecution/`。原
 - Native→native 同进程走 C++ inbox；跨进程和到完整 Java root 走原 Drill RPC。
 
 生产 Java fragment 构造器不包含 native wrapper 或 Java compute fallback。旧独立 worker 注册和启动、Velox4J Java 类型/编译器、旧私有协议及无效选项已移除。隔离 scan 宿主、低层 JNI 和 C++ engine tests 保留，用于验证真实列值、取消与资源关闭。
+
+TPC-H SQL、计时对比、集群启动和大数据生成工具留在实验工作区，不属于此源码变更。未注册到 CTest、依赖 benchmark classpath 的旧 plugin RPC runner 已移除；通用 plugin 兼容性由 Java `TestNativeGenericPluginCompatibility` 验证。

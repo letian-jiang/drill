@@ -15,16 +15,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.drill.exec.physical.impl.velox;
+package org.apache.drill.exec.planner.index;
 
 import static org.junit.Assert.assertEquals;
 import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.type.SqlTypeName;
-import org.apache.drill.exec.planner.index.ExprToRex;
 import org.junit.Test;
 
-public class TestNativeBenchmarkPlanner {
+public class TestExprToRex {
 
   @Test
   public void resolvesPrefixedDynamicStarAsLiteralFieldName() {

@@ -69,32 +69,41 @@ extern "C" void drill_register_native_scan_plugins_v1(
 
 外部模块通过 `DRILL_NATIVE_SCAN_PLUGINS` 加载；未知 provider、版本错误和重复注册失败。该接口依赖匹配的 C++/Velox/Folly ABI，extern C 仅保证入口名。[RangeScan 示例](examples/scan/RangeScanPlugin.cpp)和[模块测试](tests/execution/NativeScanPluginTest.cpp)展示真实模块加载与多 driver 工作消费；内建 [Iceberg](src/scan/iceberg/IcebergScan.cpp)使用同一接口。
 
-## 可复现的单节点验证
+## 回归验证
 
-普通 Java 对照、native + JNI scan、native + SDK scan 均使用同构 Java Drillbit。默认测试单节点，Q5 按当前约定跳过。低层 C++/JNI tests 另覆盖批次编码、RPC、取消、复杂类型、schema 和 reader 生命周期；生产路径没有 JNI fragment 提交或 root/status callback。
+C++/JNI tests 覆盖批次编码、RPC、取消、复杂类型、schema、native scan 模块和 reader 生命周期，直接通过上述 CTest 命令执行，不依赖 TPC-H 数据。生产路径没有 JNI fragment 提交或 root/status callback。
 
 ```sh
-python3 -m venv .tools/benchmark-venv
-.tools/benchmark-venv/bin/pip install -r native-execution/benchmark/requirements.txt
-.tools/benchmark-venv/bin/python native-execution/benchmark/generate_iceberg.py \
-  --output native-execution/benchmark/data --scale-factor 1
-
-# SDK 可选构建；先安装 Python 依赖。JNI scan 不需要 Iceberg C++ SDK。
-DRILL_NATIVE_PYTHON="$PWD/.tools/benchmark-venv/bin/python" \
-  native-execution/iceberg/build.sh
-
-.tools/benchmark-venv/bin/python native-execution/benchmark/run_native_engine_comparison.py \
-  --output /path/to/new-results --dataset native-execution/benchmark/data \
-  --queries 1,2,3,4,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 \
-  --warmups 2 --iterations 3 --query-timeout 180
+mvn -pl exec/java-exec -am package \
+  -Dtest=TestHomogeneousNativeLifecycle,TestNativeArrays,TestNativeDicts,TestNativeOptionalMaps,TestNativeTemporalBinary \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  -Ddrill.native.engine.library="$PWD/.tools/native-runtime/build/libdrill_native_engine.so"
 ```
 
-Comparison 默认依次运行 Java/JNI/SDK；SDK 组需要上述 reader library。Harness 使用 Maven PATH 或 `MVN` 指定的可执行程序；历史 cache 内 Maven 仅作为已有工作区的查找后备。固定基准 SQL 在 `benchmark/queries`，generator 产生的 canonical SQL 留在 dataset，测试入口显式选择固定基准 SQL。
+这些 Java JNI tests 需要显式设置 engine library；未设置时会跳过 native 部分。
 
 [通用 plugin SQL 集成测试](../contrib/storage-jdbc/src/test/java/org/apache/drill/exec/store/jdbc/TestNativeGenericPluginCompatibility.java)覆盖未改源码的 CSV/JSON/Parquet、JDBC/H2、sys 与 information_schema。执行时设置 `drill.native.plugin_compat.output`，并用 `DRILL_NATIVE_PLAN_DIR` / `DRILL_NATIVE_STATS_DIR` 指定该输出下 plans/stats 目录。
 
-性能目标：JNI 每条快于 Java；SDK 整套至少 3×且每条更快。整套比值是每查询 Java 中位数之和除以 native 中位数之和。设计文档中的旧性能数字属于归档版本；当前修改不能据此宣称新的性能验收。
+## 可选 Iceberg SDK
+
+JNI scan 不需要 Iceberg C++ SDK。内建 native Iceberg provider 的独立 reader 使用以下构建入口：
+
+```sh
+python3 -m venv .tools/iceberg-python
+.tools/iceberg-python/bin/pip install pyarrow==25.0.1
+DRILL_NATIVE_PYTHON="$PWD/.tools/iceberg-python/bin/python" \
+  native-execution/iceberg/build.sh
+```
+
+执行时通过 `DRILL_NATIVE_ICEBERG_LIBRARY` 指定 reader library，并将 SDK 工具链的 `env/lib` 加入 `LD_LIBRARY_PATH`，使用匹配的 C++ runtime。保留的 [SDK C ABI 测试](tests/scan/test_iceberg_task_reader.py)自动生成临时小数据，验证 split、partition constants、delete、Arrow ownership 与错误处理：
+
+```sh
+export LD_LIBRARY_PATH="$PWD/.tools/iceberg-toolchain/env/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export DRILL_NATIVE_ICEBERG_LIBRARY="$PWD/.tools/iceberg-build/libdrill_iceberg_reader.so"
+.tools/iceberg-python/bin/python native-execution/tests/scan/test_iceberg_task_reader.py \
+  --library "$DRILL_NATIVE_ICEBERG_LIBRARY"
+```
 
 ## 源码提交范围
 
-提交执行代码、接口、有效 tests、SQL/数据生成脚本、构建文件和设计说明。Dependency cache、数据文件、profiles、运行结果、日志和历史 PoC 不随源码提交。旧 Velox4J runtime、Java fragment wrapper/fallback、完整 worker bootstrap 和独立 C++ worker/ZooKeeper C 注册代码已移除。
+此变更包含执行代码、接口、必要回归 tests、构建文件和设计说明。TPC-H SQL、大数据生成、计时比较和 benchmark 集群启动工具留在实验工作区。Dependency cache、数据文件、profiles、运行结果、日志和历史 PoC 不随源码提交。旧 Velox4J runtime、Java fragment wrapper/fallback、完整 worker bootstrap 和独立 C++ worker/ZooKeeper C 注册代码已移除。
