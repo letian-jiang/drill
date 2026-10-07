@@ -237,12 +237,6 @@ public final class ScanHost {
     return SESSIONS.size();
   }
 
-  public static void closeStandaloneHosts() {
-    if (!SESSIONS.isEmpty()) {
-      throw new IllegalStateException("Readers still active");
-    }
-  }
-
   public static int activeReads() {
     return ACTIVE_READS.get();
   }

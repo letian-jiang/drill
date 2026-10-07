@@ -38,7 +38,7 @@ import static org.junit.Assert.fail;
 /**
  * Real, unmodified plugin creators, including legacy ScanBatch and managed ScanOperatorExec.
  */
-public class TestGenericPluginScan {
+public class TestGenericPluginScan extends NativeScanTestBase {
 
   private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -48,7 +48,7 @@ public class TestGenericPluginScan {
       "extended":%s,"entries":[{"records":%d,"extended":%s,"types":[
       {"name":"v","type":"INT","mode":"REQUIRED"}]}]}}
       """.formatted(extended, rows, extended));
-    PlanFragment context = PlanFragment.newBuilder().setHandle(FragmentHandle.newBuilder().setQueryId(QueryId.newBuilder().setPart1(19).setPart2(23)).setMajorFragmentId(2).setMinorFragmentId(3)).setAssignment(DrillbitEndpoint.newBuilder().setAddress("127.0.0.1").setControlPort(64211).setDataPort(64212)).setCredentials(UserCredentials.newBuilder().setUserName("scan-test-user")).setContext(QueryContextInformation.newBuilder().setQueryStartTime(1234567).setDefaultSchemaName("dfs.tmp")).setOptionsJson("[]").build();
+    PlanFragment context = PlanFragment.newBuilder().setHandle(FragmentHandle.newBuilder().setQueryId(QueryId.newBuilder().setPart1(19).setPart2(23)).setMajorFragmentId(2).setMinorFragmentId(3)).setAssignment(cluster.drillbit().getContext().getEndpoint().toBuilder().clearNativeExecution()).setCredentials(UserCredentials.newBuilder().setUserName("scan-test-user")).setContext(QueryContextInformation.newBuilder().setQueryStartTime(1234567).setDefaultSchemaName("dfs.tmp")).setOptionsJson("[]").build();
     descriptor.put("fragmentContext", Base64.getEncoder().encodeToString(context.toByteArray()));
     return descriptor;
   }

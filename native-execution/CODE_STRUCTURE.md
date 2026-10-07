@@ -39,6 +39,6 @@ Java 节点服务和 scan API 位于 `exec/java-exec/.../nativeexecution/`。原
 - `ScanHost/PluginScanReader/ScanContext` 借用原 registry/options/allocator 等 scan 服务，管理 reader；JNI 导入复制到 native owned vector。
 - Native→native 同进程走 C++ inbox；跨进程和到完整 Java root 走原 Drill RPC。
 
-生产 Java fragment 构造器不包含 native wrapper 或 Java compute fallback。旧独立 worker 注册和启动、Velox4J Java 类型/编译器、旧私有协议及无效选项已移除。隔离 scan 宿主、低层 JNI 和 C++ engine tests 保留，用于验证真实列值、取消与资源关闭。
+生产 Java fragment 构造器不包含 native wrapper 或 Java compute fallback。旧独立 worker 注册和启动、Velox4J Java 类型/编译器、旧私有协议及无效选项已移除。Java scan tests 借用真实 Drillbit 的服务；低层 JNI 和 C++ engine tests 验证真实列值、取消与资源关闭。C++ tests 自行创建测试 JVM，生产 JNI 只绑定宿主 JVM。
 
 TPC-H SQL、计时对比、集群启动和大数据生成工具留在实验工作区，不属于此源码变更。未注册到 CTest、依赖 benchmark classpath 的旧 plugin RPC runner 已移除；通用 plugin 兼容性由 Java `TestNativeGenericPluginCompatibility` 验证。

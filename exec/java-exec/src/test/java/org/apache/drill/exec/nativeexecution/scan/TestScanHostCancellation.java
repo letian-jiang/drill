@@ -47,7 +47,7 @@ import java.util.concurrent.TimeoutException;
 /**
  * Production ScanHost, real resources/helpers and original reader after cancel.
  */
-public class TestScanHostCancellation {
+public class TestScanHostCancellation extends NativeScanTestBase {
 
   static final Map<String, Fixture> FIXTURES = new ConcurrentHashMap<>();
 

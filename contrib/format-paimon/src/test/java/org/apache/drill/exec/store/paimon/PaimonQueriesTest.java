@@ -48,6 +48,10 @@ import org.apache.paimon.table.sink.BatchWriteBuilder;
 import org.apache.paimon.table.sink.CommitMessage;
 import org.apache.paimon.types.DataTypes;
 import org.junit.BeforeClass;
+import org.junit.Assume;
+import org.apache.drill.exec.ExecConstants;
+import org.apache.drill.exec.proto.helper.QueryIdHelper;
+import java.nio.file.Files;
 import org.junit.Test;
 
 import java.nio.file.Path;
@@ -61,6 +65,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.StringContains.containsString;
 import static org.apache.drill.exec.util.StoragePluginTestUtils.DFS_PLUGIN_NAME;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class PaimonQueriesTest extends ClusterTest {
@@ -75,7 +80,7 @@ public class PaimonQueriesTest extends ClusterTest {
 
   @BeforeClass
   public static void setUpBeforeClass() throws Exception {
-    startCluster(ClusterFixture.builder(dirTestWatcher));
+    startCluster(ClusterFixture.builder(dirTestWatcher).withLocalZk());
 
     StoragePluginRegistry pluginRegistry = cluster.drillbit().getContext().getStorage();
     FileSystemConfig pluginConfig = (FileSystemConfig) pluginRegistry.getPlugin(DFS_PLUGIN_NAME).getConfig();
@@ -93,6 +98,38 @@ public class PaimonQueriesTest extends ClusterTest {
     tableRelativePath = createAppendTable();
     pkTableRelativePath = createPrimaryKeyTable();
     typedTableRelativePath = createTypedTable();
+  }
+
+  @Test
+  public void testNativeScanUsesOriginalPaimonCreatorWithoutAdapter() throws Exception {
+    Assume.assumeTrue(System.getProperty("drill.native.engine.library") != null);
+    String plans = System.getenv("DRILL_NATIVE_PLAN_DIR");
+    Assume.assumeTrue(plans != null);
+    String query = String.format("select sum(id) from dfs.tmp.`%s` where id > 1", tableRelativePath);
+    client.alterSession(ExecConstants.NATIVE_FRAGMENT_ENABLED.getOptionName(), false);
+    assertEquals(5L, queryBuilder().sql(query).singletonLong());
+    try {
+      client.alterSession("planner.slice_target", 1L);
+      client.alterSession(ExecConstants.NATIVE_FRAGMENT_ENABLED.getOptionName(), true);
+      assertEquals(5L, queryBuilder().sql(query).singletonLong());
+      assertEquals(1, client.queryBuilder().sql(
+          "select sum(id) from dfs.tmp.`%s` where event_date < date '1970-01-01' "
+              + "and amount = 12.34", typedTableRelativePath).singletonLong());
+      var summary = queryBuilder().sql(query).run();
+      String prefix = QueryIdHelper.getQueryId(summary.queryId()).replace("-", "");
+      boolean generic = false;
+      try (var files = Files.list(Path.of(plans))) {
+        for (Path file : files.filter(path -> path.getFileName().toString().startsWith(prefix)
+            && path.toString().endsWith(".json")).toList()) {
+          String plan = Files.readString(file);
+          generic |= plan.contains("paimon-read") && plan.contains("drill-java-subscan");
+        }
+      }
+      assertTrue("Paimon scan did not execute through the generic native JNI source", generic);
+    } finally {
+      client.resetSession(ExecConstants.NATIVE_FRAGMENT_ENABLED.getOptionName());
+      client.resetSession("planner.slice_target");
+    }
   }
 
   @Test

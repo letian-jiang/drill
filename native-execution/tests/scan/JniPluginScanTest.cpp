@@ -32,6 +32,29 @@
 #include <velox/vector/FlatVector.h>
 using namespace drill::nativeexec;
 namespace {
+void startTestJvm() {
+  auto module = dlopen(std::getenv("DRILL_NATIVE_JVM_LIBRARY"), RTLD_NOW | RTLD_GLOBAL);
+  VELOX_CHECK(module);
+  auto create = reinterpret_cast<jint (*)(JavaVM **, void **, void *)>(
+      dlsym(module, "JNI_CreateJavaVM"));
+  VELOX_CHECK(create);
+  std::string classpath = std::string("-Djava.class.path=") +
+      std::getenv("DRILL_NATIVE_SCAN_CLASSPATH");
+  std::string opens = "--add-opens=java.base/java.nio=ALL-UNNAMED";
+  JavaVMOption options[] = {{classpath.data(), nullptr}, {opens.data(), nullptr}};
+  JavaVMInitArgs args{};
+  args.version = JNI_VERSION_1_8;
+  args.nOptions = 2;
+  args.options = options;
+  JavaVM *vm = nullptr;
+  JNIEnv *env = nullptr;
+  VELOX_CHECK_EQ(create(&vm, reinterpret_cast<void **>(&env), &args), JNI_OK);
+  auto klass = env->FindClass("org/apache/drill/exec/nativeexecution/scan/ScanHost");
+  VELOX_CHECK(klass);
+  bindJniScanHost(env, klass);
+  env->DeleteLocalRef(klass);
+  vm->DetachCurrentThread();
+}
 int metric(const char *name) {
   // Inspect the isolated test host, without extending the production JNI API.
   auto module = dlopen(std::getenv("DRILL_NATIVE_JVM_LIBRARY"), RTLD_NOW);
@@ -370,6 +393,7 @@ void openingMinor(int action) {
 } // namespace
 int main() {
   try {
+    startTestJvm();
     VeloxRuntime runtime(4);
     unicode(runtime);
     parallel(runtime, true);
@@ -396,7 +420,6 @@ int main() {
     drained();
     VELOX_CHECK_LE(metric("readThreadCount"), 4,
                    "I/O threads must retain their JNI attachment");
-    closeStandaloneJniScanHost();
     std::cout << "JNI readers: concurrent reads, exactly-once work claiming, "
                  "shared opaque reader, schema/read/open failures, "
                  "active/opening cancel, minor cancel/early finish/shutdown "

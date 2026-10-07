@@ -22,7 +22,6 @@
 #include <chrono>
 #include <climits>
 #include <deque>
-#include <dlfcn.h>
 #include <folly/ScopeGuard.h>
 #include <folly/json.h>
 #include <iostream>
@@ -173,62 +172,11 @@ void JNICALL import(JNIEnv *env, jclass, jlong pointer, jint rows,
 }
 struct Host {
   JavaVM *vm = nullptr;
-  bool ownsVm = false;
   jclass klass;
-  jmethodID reserve, open, schema, read, cancel, close, active, closeHosts;
+  jmethodID reserve, open, schema, read, cancel, close, active;
   Host(JNIEnv *env, jclass scanHost) {
     VELOX_USER_CHECK_EQ(env->GetJavaVM(&vm), JNI_OK);
     bind(env, scanHost);
-  }
-  Host() {
-    const char *classpath = std::getenv("DRILL_NATIVE_SCAN_CLASSPATH");
-    VELOX_USER_CHECK(classpath,
-                     "Set DRILL_NATIVE_SCAN_CLASSPATH for JNI plugins");
-    const char *library = std::getenv("DRILL_NATIVE_JVM_LIBRARY");
-    std::string defaultLibrary;
-    if (!library) {
-      const char *home = std::getenv("JAVA_HOME");
-      VELOX_USER_CHECK(
-          home, "Set JAVA_HOME or DRILL_NATIVE_JVM_LIBRARY for JNI plugins");
-      defaultLibrary = std::string(home) + "/lib/server/libjvm.so";
-      library = defaultLibrary.c_str();
-    }
-    auto module = dlopen(library, RTLD_NOW | RTLD_GLOBAL);
-    VELOX_USER_CHECK(module, "Cannot load JVM: {}", dlerror());
-    auto create = reinterpret_cast<jint (*)(JavaVM **, void **, void *)>(
-        dlsym(module, "JNI_CreateJavaVM"));
-    VELOX_USER_CHECK(create, "JVM has no JNI_CreateJavaVM");
-    std::vector<std::string> values = {
-        std::string("-Djava.class.path=") + classpath,
-        // C++ owns worker SIGINT/SIGTERM and drains Tasks before Java services.
-        // An embedded scan JVM must not replace those handlers with VM exit.
-        "-Xrs", "--add-opens=java.base/java.lang=ALL-UNNAMED",
-        "--add-opens=java.base/java.nio=ALL-UNNAMED",
-        "--add-opens=java.base/java.net=ALL-UNNAMED",
-        "--add-opens=java.base/java.util=ALL-UNNAMED",
-        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
-        // Hadoop initializes Shell by launching a child process. The JDK's
-        // special 128 KiB reaper stack is too small inside this native host;
-        // use the ordinary JVM thread stack for process completion callbacks.
-        "-Djdk.lang.processReaperUseDefaultStackSize=true",
-        "-Ddrill.exec.http.enabled=false", "-da"};
-    std::vector<JavaVMOption> options;
-    for (auto &value : values)
-      options.push_back({value.data(), nullptr});
-    JavaVMInitArgs args{};
-    args.version = JNI_VERSION_1_8;
-    args.nOptions = options.size();
-    args.options = options.data();
-    JNIEnv *env = nullptr;
-    VELOX_USER_CHECK_EQ(create(&vm, reinterpret_cast<void **>(&env), &args),
-                        JNI_OK, "Cannot start scan-only JVM");
-    ownsVm = true;
-    auto local =
-        env->FindClass("org/apache/drill/exec/nativeexecution/scan/ScanHost");
-    check(env);
-    bind(env, local);
-    env->DeleteLocalRef(local);
-    vm->DetachCurrentThread();
   }
   void bind(JNIEnv *env, jclass scanHost) {
     klass = static_cast<jclass>(env->NewGlobalRef(scanHost));
@@ -245,7 +193,6 @@ struct Host {
     cancel = env->GetStaticMethodID(klass, "cancel", "(J)V");
     close = env->GetStaticMethodID(klass, "close", "(J)V");
     active = env->GetStaticMethodID(klass, "activeScans", "()I");
-    closeHosts = env->GetStaticMethodID(klass, "closeStandaloneHosts", "()V");
     check(env);
   }
 };
@@ -253,8 +200,7 @@ std::mutex hostMutex;
 std::unique_ptr<Host> processHost;
 Host &host() {
   std::lock_guard lock(hostMutex);
-  if (!processHost)
-    processHost = std::make_unique<Host>();
+  VELOX_USER_CHECK(processHost, "JNI scan host must be bound by the Java Drillbit before execution");
   return *processHost;
 }
 // One daemon attachment per native thread, detached only when that thread
@@ -655,19 +601,6 @@ private:
   bool reading_ = false, finished_ = false, cancelled_ = false;
 };
 } // namespace
-void closeStandaloneJniScanHost() {
-  Host *ownedHost;
-  {
-    std::lock_guard lock(hostMutex);
-    if (!processHost || !processHost->ownsVm)
-      return;
-    ownedHost = processHost.get();
-  }
-  Env current;
-  current.env->CallStaticVoidMethod(ownedHost->klass, ownedHost->closeHosts);
-  check(current.env);
-  scanLog("JNI standalone scan hosts closed; active scans=0");
-}
 void bindJniScanHost(JNIEnv *env, jclass scanHost) {
   std::lock_guard lock(hostMutex);
   JavaVM *vm = nullptr;

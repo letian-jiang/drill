@@ -38,13 +38,23 @@ import org.apache.drill.exec.store.easy.text.TextFormatConfig;
 import org.apache.drill.exec.store.schedule.CompleteFileWork.FileWorkImpl;
 import org.apache.drill.test.ClusterFixture;
 import org.apache.drill.test.ClusterTest;
+import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 
 public class TestBorrowedGenericPluginScan extends ClusterTest {
+
+  @Test
+  public void unregisteredHostFailsWithoutCreatingStandaloneServices() {
+    var endpoint = DrillbitEndpoint.newBuilder().setAddress("missing-scan-host")
+        .setControlPort(64311).setDataPort(64312).build();
+    assertThrows(IllegalStateException.class, () -> ScanHost.host(endpoint));
+    assertThrows(IllegalStateException.class, () -> ScanHost.host(endpoint));
+  }
 
   @Test(timeout = 90000)
   public void originalCsvReaderBorrowsNodeRegistryAndPreservesQueryOptions() throws Exception {

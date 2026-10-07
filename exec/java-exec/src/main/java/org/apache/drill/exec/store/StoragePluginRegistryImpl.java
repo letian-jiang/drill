@@ -187,7 +187,6 @@ public class StoragePluginRegistryImpl implements StoragePluginRegistry {
    * Set of locators which provide connector implementations.
    */
   private final List<ConnectorLocator> locators = new ArrayList<>();
-  private final boolean scanServicesOnly;
 
   /**
    * Map of config (as deserialized from the persistent store or UI)
@@ -197,12 +196,6 @@ public class StoragePluginRegistryImpl implements StoragePluginRegistry {
       new IdentityHashMap<>();
 
   public StoragePluginRegistryImpl(DrillbitContext context) {
-    this(context, false);
-  }
-
-  /** Scan workers resolve the exact configs in SubScan, without loading/upgrading a server store. */
-  public StoragePluginRegistryImpl(DrillbitContext context, boolean scanServicesOnly) {
-    this.scanServicesOnly = scanServicesOnly;
     this.context = new DrillbitPluginRegistryContext(context);
     this.pluginCache = new StoragePluginMap();
     this.schemaFactory = new DrillSchemaFactory(null);
@@ -232,9 +225,7 @@ public class StoragePluginRegistryImpl implements StoragePluginRegistry {
       throw new IllegalStateException("Failed to load system plugins", e);
     }
     defineConnectors();
-    if (!scanServicesOnly) {
-      prepareStore();
-    }
+    prepareStore();
   }
 
   private void loadIntrinsicPlugins() throws PluginException {

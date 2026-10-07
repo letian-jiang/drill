@@ -39,7 +39,7 @@ import static org.junit.Assert.assertTrue;
 /**
  * Real JNI1 -> Velox aggregate -> JNI2 original Java SubScan (no plugin adapter).
  */
-public class TestGenericPluginNativeEngine {
+public class TestGenericPluginNativeEngine extends NativeScanTestBase {
 
   @Test(timeout = 60000)
   public void nativeAggregateReadsOriginalLegacyAndManagedScans() throws Exception {

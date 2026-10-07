@@ -41,7 +41,7 @@ import java.util.List;
 
 @JsonTypeName("paimon-read")
 @SuppressWarnings("unused")
-public class PaimonSubScan extends AbstractBase implements SubScan, org.apache.drill.exec.nativeexecution.scan.JniScanProvider {
+public class PaimonSubScan extends AbstractBase implements SubScan {
 
   private static final String OPERATOR_TYPE = "PAIMON_SUB_SCAN";
 
@@ -166,20 +166,6 @@ public class PaimonSubScan extends AbstractBase implements SubScan, org.apache.d
       .workList(this.workList)
       .path(this.path)
       .maxRecords(this.maxRecords);
-  }
-
-  @Override
-  public com.fasterxml.jackson.databind.node.ObjectNode jniScan(
-      com.fasterxml.jackson.databind.ObjectMapper mapper,
-      com.fasterxml.jackson.databind.node.ObjectNode originalScan) {
-    java.util.Map<String,String> fs = new java.util.LinkedHashMap<>();
-    for (var property : formatPlugin.getFsConf()) {
-      fs.put(property.getKey(), property.getValue());
-    }
-    originalScan.set("fsConf", mapper.valueToTree(fs));
-    return mapper.createObjectNode()
-        .put("provider", "org.apache.drill.exec.store.paimon.read.PaimonJniScanFactory")
-        .set("scan", originalScan);
   }
 
   public static class PaimonSubScanBuilder {

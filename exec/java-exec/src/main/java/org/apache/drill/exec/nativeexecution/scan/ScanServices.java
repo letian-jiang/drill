@@ -72,8 +72,6 @@ public final class ScanServices implements OperatorContext, AutoCloseable {
 
   private final OptionManager options;
 
-  private final AutoCloseable readerLease;
-
   private final ScanHostServices host;
 
   private final PlanFragment fragment;
@@ -88,10 +86,6 @@ public final class ScanServices implements OperatorContext, AutoCloseable {
 
   private volatile boolean cancelled;
 
-  public ScanServices(String name) throws Exception {
-    this(name, null);
-  }
-
   public ScanServices(String name, JsonNode descriptor) throws Exception {
     fragment = descriptor != null && descriptor.has("fragmentContext") ? PlanFragment.parseFrom(Base64.getDecoder().decode(descriptor.get("fragmentContext").asText())) : PlanFragment.getDefaultInstance();
     host = ScanHost.host(fragment.getAssignment());
@@ -99,19 +93,12 @@ public final class ScanServices implements OperatorContext, AutoCloseable {
     mapper = host.mapper();
     OptionList supplied = fragment.getOptionsJson().isEmpty() ? new OptionList() : mapper.readValue(fragment.getOptionsJson(), OptionList.class);
     options = new FragmentOptionManager(host.options(), supplied);
-    readerLease = host instanceof StandaloneScanHostServices ? ((StandaloneScanHostServices) host).readerLease() : () -> {
-    };
-    try {
-      allocator = host.allocator().newChildAllocator("jni-scan:" + name, 0, Long.MAX_VALUE);
-    } catch (Throwable error) {
-      org.apache.drill.common.AutoCloseables.close(error, readerLease);
-      throw error;
-    }
+    allocator = host.allocator().newChildAllocator("jni-scan:" + name, 0, Long.MAX_VALUE);
     try {
       buffers = new BufferManagerImpl(allocator);
       stats = new OperatorStats(0, name, 1, allocator);
     } catch (Throwable error) {
-      org.apache.drill.common.AutoCloseables.close(error, allocator, readerLease);
+      org.apache.drill.common.AutoCloseables.close(error, allocator);
       throw error;
     }
   }
@@ -329,7 +316,6 @@ public final class ScanServices implements OperatorContext, AutoCloseable {
       }
       resources.add(buffers);
       resources.add(allocator);
-      resources.add(readerLease);
       org.apache.drill.common.AutoCloseables.close(resources);
     } catch (Exception e) {
       throw new IllegalStateException("Closing plugin scan resources", e);

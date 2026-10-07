@@ -44,7 +44,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Actual JNI1 control -> C++ MinorTaskRegistry -> JNI2 production ScanHost.
  */
-public class TestNativeScanOpening {
+public class TestNativeScanOpening extends NativeScanTestBase {
 
   @Test(timeout = 90000)
   public void cancelEarlyFinishAndCloseInterruptOpeningPluginThroughBothJniLayers() throws Exception {

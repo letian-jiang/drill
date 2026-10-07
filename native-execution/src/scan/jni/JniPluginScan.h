@@ -33,9 +33,6 @@ struct JniScanBinding {
 // Called from the Java host before any Task starts. Borrows its existing JVM
 // and the exact ScanHost class/loader instead of creating a second JVM.
 void bindJniScanHost(JNIEnv *env, jclass scanHost);
-// Standalone worker shutdown, after Tasks/readers drain. A borrowed JVM and
-// Java Drillbit services are never closed by this entrypoint.
-void closeStandaloneJniScanHost();
 // Opens a seed plugin reader for schema discovery on the shared Scan/I/O
 // executor. Independent work uses per-driver sources/pools and is claimed
 // once. Single/opaque work shares one source across drivers.

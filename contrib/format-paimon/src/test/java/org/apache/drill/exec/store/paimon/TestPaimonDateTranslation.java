@@ -55,6 +55,18 @@ public class TestPaimonDateTranslation {
   }
 
   @Test
+  public void serializedDecimalLiteralBindsToOriginalDecimalField() {
+    RowType rowType = RowType.of(new org.apache.paimon.types.DataType[] { DataTypes.DECIMAL(12, 2) },
+        new String[] { "amount" });
+    var predicate = DrillExprToPaimonTranslator.translate(
+        LogicalExpressionParser.parse("equal(`amount`, 12.34)"), rowType);
+    assertTrue(predicate.test(GenericRow.of(org.apache.paimon.data.Decimal.fromBigDecimal(
+        new java.math.BigDecimal("12.34"), 12, 2))));
+    assertFalse(predicate.test(GenericRow.of(org.apache.paimon.data.Decimal.fromBigDecimal(
+        new java.math.BigDecimal("12.35"), 12, 2))));
+  }
+
+  @Test
   public void serializedDateCastsKeepBoundaryAndUnits() {
     RowType rowType = RowType.of(new org.apache.paimon.types.DataType[] { DataTypes.DATE() }, new String[] { "day" });
     for (String text : List.of("less_than_or_equal_to(`day`, cast(0 as DATE))", "less_than_or_equal_to(`day`, cast('1970-01-01' as DATE))")) {

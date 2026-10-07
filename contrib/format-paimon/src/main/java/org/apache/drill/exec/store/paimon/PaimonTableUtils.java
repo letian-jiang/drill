@@ -45,21 +45,15 @@ public final class PaimonTableUtils {
    * returns the corresponding system table; otherwise returns the data table.
    */
   public static Table loadTable(PaimonFormatPlugin formatPlugin, String path) throws IOException {
-    return loadTable(formatPlugin.getFsConf(), formatPlugin.getConfig(), path);
-  }
-
-  /** Reading resources are independent of the planner's format plugin instance. */
-  public static Table loadTable(org.apache.hadoop.conf.Configuration fsConf,
-      PaimonFormatPluginConfig formatConfig, String path) throws IOException {
     PaimonMetadataType metadataType = extractMetadataType(path);
     String tableLocation = metadataType == null ? path : stripMetadataType(path);
     Path tablePath = new Path(tableLocation);
     Options options = new Options();
-    CatalogContext context = CatalogContext.create(options, fsConf);
+    CatalogContext context = CatalogContext.create(options, formatPlugin.getFsConf());
     FileIO fileIO = FileIO.get(tablePath, context);
     FileStoreTable table = FileStoreTableFactory.create(fileIO, tablePath);
     // Apply time-travel and custom options at table load time.
-    Map<String, String> dynamicOptions = buildDynamicOptions(formatConfig);
+    Map<String, String> dynamicOptions = buildDynamicOptions(formatPlugin.getConfig());
     if (!dynamicOptions.isEmpty()) {
       table = table.copy(dynamicOptions);
     }

@@ -86,40 +86,6 @@ public class DrillbitContext implements AutoCloseable {
   private final DrillCounters counters;
   private final DaffodilSchemaProvider daffodilSchemaProvider;
 
-  /**
-   * Constructor for a plugin service facade. It starts no Drillbit services.
-   * The subclass supplies scan resources and rejects node execution/RPC APIs.
-   * Existing plugin constructors require this concrete type, so the facade
-   * preserves their ABI without constructing a Java worker.
-   */
-  protected DrillbitContext(boolean scanServicesOnly) {
-    if (!scanServicesOnly) {
-      throw new IllegalArgumentException("Use the normal DrillbitContext constructor for a Java node");
-    }
-    context = null;
-    reader = null;
-    coord = null;
-    connectionsPool = null;
-    endpoint = null;
-    storagePlugins = null;
-    aliasRegistryProvider = null;
-    oAuthTokenProvider = null;
-    operatorCreatorRegistry = null;
-    controller = null;
-    workBus = null;
-    functionRegistry = null;
-    systemOptions = null;
-    provider = null;
-    compiler = null;
-    classpathScan = null;
-    lpPersistence = null;
-    table = null;
-    profileStoreContext = null;
-    metastoreRegistry = null;
-    counters = null;
-    daffodilSchemaProvider = null;
-  }
-
   public DrillbitContext(
       DrillbitEndpoint endpoint,
       BootStrapContext context,

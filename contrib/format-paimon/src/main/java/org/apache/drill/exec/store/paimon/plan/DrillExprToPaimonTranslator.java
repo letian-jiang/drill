@@ -283,6 +283,12 @@ public class DrillExprToPaimonTranslator
     DataField field = context.rowType.getFields().get(index);
     Object internalValue;
     try {
+      // LogicalExpression wire syntax parses bare decimal literals as DOUBLE.
+      // Restore their decimal value before the original Paimon predicate binds.
+      if (field.type() instanceof org.apache.paimon.types.DecimalType && value instanceof Number
+          && !(value instanceof BigDecimal)) {
+        value = new BigDecimal(value.toString());
+      }
       internalValue = PredicateBuilder.convertJavaObject(field.type(), value);
     } catch (RuntimeException e) {
       return null;

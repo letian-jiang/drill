@@ -119,10 +119,6 @@ public class PooledByteBufAllocatorL {
       }
       removeOldMetrics();
 
-      // Include retained pool chunks, not only buffers charged to live allocators.
-      registry.register(METRIC_PREFIX + "pool.direct.size", (Gauge<Long>) () -> metric().usedDirectMemory());
-      registry.register(METRIC_PREFIX + "pool.heap.size", (Gauge<Long>) () -> metric().usedHeapMemory());
-
       registry.register(METRIC_PREFIX + "normal.size", new Gauge<Long>() {
         @Override
         public Long getValue() {

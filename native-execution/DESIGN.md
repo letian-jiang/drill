@@ -447,7 +447,7 @@ Java 的节点生命周期和 scan 公共接口位于 `exec/java-exec/.../native
 
 修改原 Drill 的集中边界是节点生命周期与 endpoint 发布、并行化候选/路由、fragment 初始化协议、Java root 的批次接收，以及必要的语义修复。原 plugin 的读取实现不因通用 JNI 接入而改写；plugin 选择 native reader 时，只需增加 descriptor 接口实现和对应 C++ provider。
 
-旧独立 worker 启动/注册和 Velox4J 执行器已移除；隔离 scan 宿主及低层引擎测试仍保留用于有效回归。详细文件定位见 [CODE_STRUCTURE](CODE_STRUCTURE.md)，当前职责以本文和所链接的实现为准。
+旧独立 worker 启动/注册和 Velox4J 执行器已移除；独立 scan 宿主和 plugin context facade 已移除；Java scan 回归借用真实 Drillbit，C++ JNI 回归使用测试专用 JVM。详细文件定位见 [CODE_STRUCTURE](CODE_STRUCTURE.md)，当前职责以本文和所链接的实现为准。
 
 ## 11. 已有验证与性能验收
 

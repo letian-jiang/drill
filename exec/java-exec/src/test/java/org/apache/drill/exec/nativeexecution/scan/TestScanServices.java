@@ -38,11 +38,11 @@ import org.apache.drill.common.scanner.ClassPathScanner;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.junit.Test;
 
-public class TestScanServices {
+public class TestScanServices extends NativeScanTestBase {
 
   @Test(timeout = 60000)
   public void closingWaitsForCancelledHelperToExitBeforeFreeingBuffers() throws Exception {
-    var services = new ScanServices("helper-drain-test");
+    var services = new ScanServices("helper-drain-test", TestGenericPluginScan.descriptor(false, 0));
     var closer = Executors.newSingleThreadExecutor();
     var started = new CountDownLatch(1);
     var cancelled = new CountDownLatch(1);
@@ -107,7 +107,7 @@ public class TestScanServices {
         futures.add(executor.submit(() -> {
           for (int round = 0; round < 4; round++) {
             barrier.await(30, TimeUnit.SECONDS);
-            try (var services = new ScanServices("reader-lifecycle-test")) {
+            try (var services = new ScanServices("reader-lifecycle-test", TestGenericPluginScan.descriptor(false, 0))) {
               assertNotNull(services.options());
               var buffer = services.getManagedBuffer(32);
               buffer.setLong(0, 123456L);
@@ -130,7 +130,7 @@ public class TestScanServices {
       for (var future : futures) {
         future.get(90, TimeUnit.SECONDS);
       }
-      try (var reopened = new ScanServices("after-all-readers-close")) {
+      try (var reopened = new ScanServices("after-all-readers-close", TestGenericPluginScan.descriptor(false, 0))) {
         assertEquals(SchemaPath.getSimplePath("v"), reopened.mapper().readValue("\"`v`\"", SchemaPath.class));
       }
     } finally {

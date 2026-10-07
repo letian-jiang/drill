@@ -56,43 +56,13 @@ public final class ScanHost {
     return () -> HOSTS.remove(key, services);
   }
 
-  static synchronized ScanHostServices host(DrillbitEndpoint endpoint) throws Exception {
+  static ScanHostServices host(DrillbitEndpoint endpoint) {
     String key = hostKey(endpoint);
     var host = HOSTS.get(key);
     if (host == null) {
-      host = new StandaloneScanHostServices(endpoint);
-      HOSTS.put(key, host);
+      throw new IllegalStateException("No Drillbit JNI scan services registered for " + key);
     }
     return host;
-  }
-
-  /**
-   * Called only after native Tasks and readers have drained. Borrowed Java nodes are untouched.
-   */
-  public static synchronized void closeStandaloneHosts() throws Exception {
-    if (!READERS.isEmpty()) {
-      throw new IllegalStateException("JNI readers must drain before closing scan hosts");
-    }
-    var owned = new java.util.ArrayList<AutoCloseable>();
-    for (var entry : HOSTS.entrySet()) {
-      if (entry.getValue() instanceof StandaloneScanHostServices) {
-        owned.add(() -> {
-          ((StandaloneScanHostServices) entry.getValue()).close();
-          HOSTS.remove(entry.getKey(), entry.getValue());
-        });
-      }
-    }
-    org.apache.drill.common.AutoCloseables.close(owned);
-  }
-
-  static {
-    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-      try {
-        closeStandaloneHosts();
-      } catch (Exception error) {
-        error.printStackTrace();
-      }
-    }, "jni-plugin-host-close"));
   }
 
   private static final class Session {
