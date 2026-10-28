@@ -105,7 +105,7 @@ public class TestGenericPluginScan extends NativeScanTestBase {
     var descriptor = descriptor(false, 3);
     try (var services = new ScanServices("serialize-original-plugin", descriptor)) {
       var scan = (MockSubScanPOP) services.planReader().readFragmentLeaf(descriptor.get("scan").toString());
-      var plan = JSON.readTree(NativeMinorPlanSerializer.serialize(services.planReader(), scan, false));
+      var plan = JSON.readTree(NativeMinorPlanSerializer.serialize(services.planReader(), scan));
       assertEquals("drill-java-subscan", plan.path("jniScan").path("provider").asText());
       assertFalse(plan.path("jniScan").path("scan").has("jniScan"));
       assertEquals(3, plan.path("jniScan").path("scan").path("entries").get(0).path("records").asInt());

@@ -19,7 +19,6 @@
 #include "plan/FragmentPlanConverter.h"
 #include "plan/ExpressionBinder.h"
 #include "plan/DrillSchema.h"
-#include "columnar/DrillRowType.h"
 #include <unordered_set>
 #include <velox/exec/HashPartitionFunction.h>
 #include <velox/exec/PartitionFunction.h>
@@ -88,33 +87,11 @@ core::PlanNodePtr FragmentPlanConverter::convertImpl(const folly::dynamic &node)
   auto pop = node["pop"].asString();
   auto id = "drill_" + std::to_string(node["@id"].asInt());
   if (pop == "unordered-receiver" || pop == "merging-receiver" ||
-      pop.ends_with("-scan") || node.count("nativeScan") ||
+      pop.ends_with("-scan") ||
       node.count("jniScan")) {
     auto binding = source_(node);
     core::PlanNodePtr source = std::make_shared<DrillSourceNode>(
         id, binding.schema, binding.kind, std::move(binding.factory));
-    if (node.count("nativeScan")) {
-      const auto &scan = node["nativeScan"];
-      if (scan.count("filter") && !scan["filter"].isNull())
-        source = std::make_shared<core::FilterNode>(
-            id + "_filter",
-            expression(scan["filter"].asString(), source->outputType()),
-            source);
-      std::vector<std::string> names;
-      std::vector<core::TypedExprPtr> values;
-      for (const auto &column : scan["outputFields"]) {
-        auto name = column["name"].asString();
-        names.push_back(name);
-        core::TypedExprPtr value = std::make_shared<core::FieldAccessTypedExpr>(
-            source->outputType()->findChild(name), name);
-        if (binding.normalizeOutput)
-          value = binding.normalizeOutput(std::move(value), column, pool_);
-        values.push_back(std::move(value));
-      }
-      source = std::make_shared<core::ProjectNode>(id + "_projection", names,
-                                                   values, source);
-      annotateDrillSchema(source->outputType(), scan["outputFields"]);
-    }
     if (pop == "merging-receiver") {
       std::vector<core::FieldAccessTypedExprPtr> keys;
       std::vector<core::SortOrder> orders;

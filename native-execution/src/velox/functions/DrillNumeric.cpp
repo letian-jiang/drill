@@ -38,20 +38,6 @@ public:
     });
   }
 };
-class TimestampMillis final : public exec::VectorFunction {
-public:
-  void apply(const SelectivityVector &rows, std::vector<VectorPtr> &args,
-             const TypePtr &type, exec::EvalCtx &ctx, VectorPtr &result) const override {
-    BaseVector::ensureWritable(rows, type, ctx.pool(), result);
-    DecodedVector input(*args[0], rows);
-    auto *output = result->as<FlatVector<Timestamp>>();
-    rows.applyToSelected([&](vector_size_t row) {
-      auto value = input.valueAt<Timestamp>(row);
-      output->set(row, Timestamp(value.getSeconds(),
-          value.getNanos() / 1000000 * 1000000));
-    });
-  }
-};
 class TimestampFromMillis final : public exec::VectorFunction {
 public:
   void apply(const SelectivityVector &rows, std::vector<VectorPtr> &args,
@@ -67,7 +53,7 @@ public:
     });
   }
 };
-enum class TimeConversion { FromMillis, FromString, ToMillis, ToMicros, Normalize };
+enum class TimeConversion { FromMillis, FromString, ToMillis };
 class TimeConvert final : public exec::VectorFunction {
 public:
   explicit TimeConvert(TimeConversion conversion) : conversion_(conversion) {}
@@ -83,18 +69,6 @@ public:
       if (conversion_ == TimeConversion::FromMillis)
         VELOX_USER_CHECK(value >= INT32_MIN && value <= INT32_MAX,
                          "TIME does not fit Drill's 32-bit millisecond value");
-      if (conversion_ == TimeConversion::ToMicros) {
-        VELOX_USER_CHECK(value >= INT32_MIN && value <= INT32_MAX,
-                         "TIME does not fit Drill's 32-bit millisecond value");
-        value *= 1000;
-      }
-      if (conversion_ == TimeConversion::Normalize) {
-        VELOX_USER_CHECK(value >= 0 && value < 86400000000LL,
-                         "Iceberg TIME is outside a day");
-        // DateUtilities.toDrillTime rounds LocalTime to milliseconds. Keep
-        // 86400000 at the last half-millisecond, exactly like the Java reader.
-        value = (value + 500) / 1000;
-      }
       output->set(row, value);
     });
   }
@@ -112,15 +86,9 @@ void registerNumericFunctions() {
   time("drill_time_from_millis", "bigint", "time", TimeConversion::FromMillis);
   time("drill_time_from_string", "varchar", "time", TimeConversion::FromString);
   time("drill_time_to_millis", "time", "bigint", TimeConversion::ToMillis);
-  time("drill_time_to_micros", "time", "time micro utc", TimeConversion::ToMicros);
-  time("drill_time_micro_value", "time micro utc", "bigint", TimeConversion::ToMillis);
-  time("drill_time_millis", "time micro utc", "time", TimeConversion::Normalize);
   exec::registerVectorFunction("drill_timestamp_from_millis",
       {exec::FunctionSignatureBuilder().returnType("timestamp")
            .argumentType("bigint").build()}, std::make_unique<TimestampFromMillis>());
-  exec::registerVectorFunction("drill_timestamp_millis",
-      {exec::FunctionSignatureBuilder().returnType("timestamp")
-           .argumentType("timestamp").build()}, std::make_unique<TimestampMillis>());
   exec::registerVectorFunction("drill_ieee_divide",
                                {exec::FunctionSignatureBuilder()
                                     .returnType("double")

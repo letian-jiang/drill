@@ -359,7 +359,7 @@ void timeWire(memory::MemoryPool *pool) {
   rejected = false;
   try { fieldsFromType(ROW({"raw"}, {TIME_MICRO_UTC()})); }
   catch (const VeloxException &) { rejected = true; }
-  VELOX_CHECK(rejected, "SDK microseconds must never leak into Drill exchange");
+  VELOX_CHECK(rejected, "Microsecond TIME is not a supported Drill exchange type");
 }
 
 void decimalWireBoundaries(bool shortDecimal, memory::MemoryPool *pool) {

@@ -20,7 +20,7 @@
 #include "scan/ScanReader.h"
 #include <velox/core/PlanNode.h>
 namespace drill::nativeexec {
-enum class SourceKind { Receiver, JniScan, NativeScan };
+enum class SourceKind { Receiver, JniScan };
 class DrillSourceNode : public core::PlanNode {
 public:
   DrillSourceNode(std::string id, RowTypePtr type, SourceKind kind,
@@ -37,8 +37,6 @@ public:
       return "DrillReceiver";
     case SourceKind::JniScan:
       return "JniPluginScan";
-    case SourceKind::NativeScan:
-      return "NativeScan";
     }
     return "InvalidDrillSource";
   }

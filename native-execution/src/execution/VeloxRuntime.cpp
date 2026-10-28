@@ -17,7 +17,6 @@
  * under the License.
  */
 #include "execution/VeloxRuntime.h"
-#include "scan/NativeScanRegistry.h"
 #include "exchange/DrillHash.h"
 #include "velox/functions/DrillDecimal.h"
 #include "velox/functions/DrillDict.h"
@@ -57,7 +56,6 @@ void initializeVelox() {
     functions::window::registerNtileInteger("ntile");
     exec::registerFunctionCallToSpecialForms();
     registerDrillOperators();
-    initializeNativeScanPlugins();
     registerDecimalFunctions();
     registerHashFunctions();
     registerNumericFunctions();

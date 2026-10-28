@@ -58,7 +58,7 @@ int main() {
       std::mutex mutex;
       std::map<int, std::array<int64_t, 3>> actual;
       FragmentPlanConverter converter(leaf.get(), [&](const folly::dynamic &) {
-        return SourceBinding{ROW({"v"}, {BIGINT()}), SourceKind::NativeScan,
+        return SourceBinding{ROW({"v"}, {BIGINT()}), SourceKind::JniScan,
                              [rows](memory::MemoryPool *) { return rows; }};
       }, [&](const folly::dynamic &, const RowTypePtr &) {
         return SinkFactory([&](memory::MemoryPool *) {
@@ -110,7 +110,7 @@ int main() {
       deleted.wait();
     }
     for (auto kind :
-         {SourceKind::NativeScan, SourceKind::Receiver, SourceKind::JniScan}) {
+         {SourceKind::Receiver, SourceKind::JniScan}) {
       auto pool = memory::memoryManager()->addRootPool(
           "pure-task-" + std::to_string(int(kind)));
       auto leaf = pool->addLeafChild("input-plan");

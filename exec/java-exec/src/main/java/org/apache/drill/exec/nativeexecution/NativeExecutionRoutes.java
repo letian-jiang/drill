@@ -37,7 +37,7 @@ public final class NativeExecutionRoutes {
   }
 
   public static boolean enabled(OptionManager options) {
-    return options.getBoolean(ExecConstants.NATIVE_FRAGMENT_ENABLED.getOptionName()) || options.getBoolean(ExecConstants.NATIVE_FRAGMENT_STRICT.getOptionName());
+    return options.getBoolean(ExecConstants.NATIVE_FRAGMENT_ENABLED.getOptionName());
   }
 
   public static DrillbitEndpoint control(DrillbitEndpoint assignment) {

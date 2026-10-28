@@ -173,8 +173,6 @@ public class TestNativeGenericPluginCompatibility extends ClusterTest {
 
   private static Result execute(String name, String sql, boolean nativeMode) throws Exception {
     client.alterSession("exec.native_fragment.enabled", nativeMode);
-    client.alterSession("exec.native_fragment.strict", nativeMode);
-    client.alterSession("exec.native_scan.enabled", false);
     var listener = new BufferingQueryEventListener();
     var iterator = new QueryBatchIterator(client.allocator(), listener);
     List<List<Object>> rows = new ArrayList<>();

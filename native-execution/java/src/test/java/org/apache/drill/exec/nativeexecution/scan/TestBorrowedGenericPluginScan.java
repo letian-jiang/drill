@@ -71,7 +71,7 @@ public class TestBorrowedGenericPluginScan extends ClusterTest {
         var path = new org.apache.hadoop.fs.Path(file.toUri());
         var scan = new EasySubScan("scan-test-user", List.of(new FileWorkImpl(0, Files.size(file), path)), plugin, List.of(SchemaPath.getSimplePath("v"), SchemaPath.getSimplePath("w")), path.getParent(), 0, null, -1);
         scan.setOperatorId(7);
-        ObjectNode plan = (ObjectNode) new ObjectMapper().readTree(NativeMinorPlanSerializer.serialize(node.getPlanReader(), scan, false));
+        ObjectNode plan = (ObjectNode) new ObjectMapper().readTree(NativeMinorPlanSerializer.serialize(node.getPlanReader(), scan));
         ObjectNode descriptor = (ObjectNode) plan.get("jniScan");
         var context = PlanFragment.newBuilder().setAssignment(node.getEndpoint()).setForeman(node.getEndpoint()).setHandle(FragmentHandle.newBuilder().setMajorFragmentId(1).setMinorFragmentId(0).setQueryId(QueryId.newBuilder().setPart1(31).setPart2(37))).setCredentials(UserCredentials.newBuilder().setUserName("scan-test-user")).setOptionsJson("""
           [{"name":"exec.native_scan.batch_records","kind":"LONG","scope":"SESSION","num_val":16384}]

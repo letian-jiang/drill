@@ -64,8 +64,6 @@ public class TestHomogeneousNativeLifecycle extends ClusterTest {
     assertEquals(1, registrationIds.size());
     String sql = "select sum(v) from dfs.root.`homogeneous`";
     client.alterSession("exec.native_fragment.enabled", true);
-    client.alterSession("exec.native_fragment.strict", true);
-    client.alterSession("exec.native_scan.enabled", false);
     assertEquals(21, client.queryBuilder().sql(sql).singletonLong());
     bit.disableNativeExecution("controlled lifecycle test");
     deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
@@ -81,7 +79,6 @@ public class TestHomogeneousNativeLifecycle extends ClusterTest {
     assertEquals(registrationIds, coordinator.getCurator().getChildren().forPath(servicePath));
     assertThrows(Exception.class, () -> client.queryBuilder().sql(sql).run());
     client.alterSession("exec.native_fragment.enabled", false);
-    client.alterSession("exec.native_fragment.strict", false);
     assertEquals(21, client.queryBuilder().sql(sql).singletonLong());
   }
 }

@@ -65,12 +65,8 @@ public class QueryWorkUnit {
             && org.apache.drill.exec.physical.impl.velox.NativeExecutionNode
                 .isRpcEngine(fragment.getAssignment())
             && options.stream().anyMatch(option -> Boolean.TRUE.equals(option.bool_val)
-                && (option.name.equalsIgnoreCase(org.apache.drill.exec.ExecConstants.NATIVE_FRAGMENT_ENABLED.getOptionName())
-                    || option.name.equalsIgnoreCase(org.apache.drill.exec.ExecConstants.NATIVE_FRAGMENT_STRICT.getOptionName())))
-            ? org.apache.drill.exec.physical.impl.velox.NativeMinorPlanSerializer.serialize(reader, root,
-                options.stream().filter(option -> option.name.equalsIgnoreCase(
-                    org.apache.drill.exec.ExecConstants.NATIVE_SCAN_ENABLED.getOptionName()))
-                    .map(option -> option.bool_val).reduce((left, right) -> right).orElse(true))
+                && option.name.equalsIgnoreCase(org.apache.drill.exec.ExecConstants.NATIVE_FRAGMENT_ENABLED.getOptionName()))
+            ? org.apache.drill.exec.physical.impl.velox.NativeMinorPlanSerializer.serialize(reader, root)
             : reader.writeJson(root);
         final String optionsData = reader.writeJson(options);
         return PlanFragment.newBuilder(fragment)

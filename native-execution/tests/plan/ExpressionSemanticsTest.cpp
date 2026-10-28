@@ -19,7 +19,6 @@
 #include "execution/VeloxRuntime.h"
 #include "plan/FragmentPlanConverter.h"
 #include "plan/ExpressionBinder.h"
-#include "scan/iceberg/IcebergOutput.h"
 #include <atomic>
 #include <cmath>
 #include <iostream>
@@ -135,8 +134,8 @@ int main() {
     auto temporalType = ROW({"ts", "n"}, {TIMESTAMP(), BIGINT()});
     auto temporal = std::dynamic_pointer_cast<RowVector>(BaseVector::create(temporalType, 4, pool.get()));
     auto *ts = temporal->childAt(0)->as<FlatVector<Timestamp>>();
-    ts->set(0, Timestamp(-1,999999000)); ts->set(1, Timestamp(0,1000));
-    ts->set(2, Timestamp(0,1001000)); ts->setNull(3, true);
+    ts->set(0, Timestamp(-1,999000000)); ts->set(1, Timestamp(0,0));
+    ts->set(2, Timestamp(0,1000000)); ts->setNull(3, true);
     auto *integers = temporal->childAt(1)->as<FlatVector<int64_t>>();
     for (int row = 0; row < 4; ++row) integers->set(row, 0);
     integers->set(1, INT64_MIN); integers->set(2, INT64_MAX);
@@ -144,10 +143,10 @@ int main() {
     std::vector<int64_t> temporalRows;
     FragmentPlanConverter temporalConverter(pool.get(),
         [&](const folly::dynamic &) {
-          return SourceBinding{temporalType, SourceKind::NativeScan,
+          return SourceBinding{temporalType, SourceKind::Receiver,
               [pool, temporal, temporalClaimed](memory::MemoryPool *) {
                 return std::make_shared<Input>(pool, temporal, temporalClaimed);
-              }, icebergOutput};
+              }};
         }, [&](const folly::dynamic &, const RowTypePtr &) {
           return SinkFactory([&](memory::MemoryPool *) {
             return BatchSink([&](RowVectorPtr batch) -> ContinueFuture {
@@ -172,31 +171,30 @@ int main() {
        {"ref":"`ts`","expr":"`ts`"},{"ref":"`cast`","expr":"cast(`n` as TIMESTAMP)"},
        {"ref":"`negative`","expr":"cast(-1001 as TIMESTAMP)"},
        {"ref":"`future`","expr":"cast(1924992000123 as TIMESTAMP)"}],
-       "child":{"pop":"test-scan","@id":1,
-       "nativeScan":{"filter":"greater_than(`ts`,cast('1970-01-01 00:00:00' as TIMESTAMP))",
-       "outputFields":[{"name":"ts","minor":"TIMESTAMP","optional":true},
-                       {"name":"n","minor":"BIGINT","optional":true}]}}}})PLAN"));
-    auto temporalTask = runtime.task("drill-native-scan-precision", temporalPlan, root);
+       "child":{"pop":"filter","@id":3,
+       "expr":"greater_than_or_equal_to(`ts`,cast('1970-01-01 00:00:00' as TIMESTAMP))",
+       "child":{"pop":"unordered-receiver","@id":1}}}})PLAN"));
+    auto temporalTask = runtime.task("drill-temporal-semantics", temporalPlan, root);
     auto temporalComplete = temporalTask->taskCompletionFuture();
     temporalTask->start(1);
     std::move(temporalComplete).get();
     if (temporalTask->error()) std::rethrow_exception(temporalTask->error());
     VELOX_CHECK(temporalRows == std::vector<int64_t>({0,1}),
-        "Scan filter must see raw microseconds before output normalization");
-    auto timeSchema = ROW({"t"}, {TIME_MICRO_UTC()});
+        "Millisecond timestamp filtering must preserve cast semantics");
+    auto timeSchema = ROW({"t"}, {TIME()});
     auto times = BaseVector::create<RowVector>(timeSchema, 9, pool.get());
     auto *timeValues = times->childAt(0)->as<FlatVector<int64_t>>();
-    const std::vector<int64_t> rawTimes{1001000, 1001001, 1001999, 0, 0, 86399999999LL,
-                                       1001499, 1001500, 1001501};
+    const std::vector<int64_t> rawTimes{1001, 1002, 1003, 0, 0, 86400000,
+                                       1001, 1002, 1003};
     for (vector_size_t row = 0; row < times->size(); ++row) timeValues->set(row, rawTimes[row]);
     timeValues->setNull(3, true);
     auto timeClaimed = std::make_shared<std::atomic<bool>>(false);
     std::vector<int64_t> actualTimes;
     FragmentPlanConverter timeConverter(pool.get(), [&](const folly::dynamic &) {
-      return SourceBinding{timeSchema, SourceKind::NativeScan,
+      return SourceBinding{timeSchema, SourceKind::Receiver,
           [pool, times, timeClaimed](memory::MemoryPool *) {
             return std::make_shared<Input>(pool, times, timeClaimed);
-          }, icebergOutput};
+          }};
     }, [&](const folly::dynamic &, const RowTypePtr &output) {
       VELOX_CHECK(output->childAt(0)->equivalent(*TIME()));
       return SinkFactory([&](memory::MemoryPool *) {
@@ -222,22 +220,22 @@ int main() {
        {"ref":"`l`","expr":"cast(`t` as BIGINT)"},
        {"ref":"`literal`","expr":"cast(1001 as TIME)"},
        {"ref":"`text`","expr":"cast('00:00:01.001' as TIME)"}],
-       "child":{"pop":"test-scan","@id":1,"nativeScan":{
-       "filter":"greater_than(`t`,cast(1001 as TIME))",
-       "outputFields":[{"name":"t","minor":"TIME","optional":true}]}}}})PLAN"));
-    auto timeTask = runtime.task("drill-native-time-precision", timePlan, root);
+       "child":{"pop":"filter","@id":3,
+       "expr":"greater_than(`t`,cast(1001 as TIME))",
+       "child":{"pop":"unordered-receiver","@id":1}}}})PLAN"));
+    auto timeTask = runtime.task("drill-time-semantics", timePlan, root);
     auto timeComplete = timeTask->taskCompletionFuture(); timeTask->start(4);
     std::move(timeComplete).get();
     if (timeTask->error()) std::rethrow_exception(timeTask->error());
-    VELOX_CHECK(actualTimes == std::vector<int64_t>({1001,1002,86400000,1001,1002,1002}),
-        "TIME scan filter must compare microseconds and output must expose milliseconds");
+    VELOX_CHECK(actualTimes == std::vector<int64_t>({1002,1003,86400000,1002,1003}),
+        "TIME filtering and casts must preserve Drill milliseconds");
     const auto logicalTime = ROW({"t"}, {TIME()});
     VELOX_CHECK(bindExpression("min(`t`)", logicalTime)->type()->equivalent(*TIME()),
                  "MIN must retain the TIME logical type");
     VELOX_CHECK(bindExpression("max(`t`)", logicalTime)->type()->equivalent(*TIME()),
                  "MAX must retain the TIME logical type");
     std::cout << "Exact mixed-scale decimals, integer/decimal coercion, "
-                 "UTF-8/NULL substring, IEEE divide, native scan filter/precision ordering passed.\n";
+                 "UTF-8/NULL substring, IEEE divide, millisecond TIME/TIMESTAMP filtering and casts passed.\n";
     return 0;
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';

@@ -31,7 +31,7 @@ endif()
 set(DRILL_NATIVE_SOURCES "${DRILL_NATIVE_CACHE}/sources")
 find_path(DRILL_RE2_INCLUDE_DIR re2/re2.h
   HINTS "${DRILL_NATIVE_DEPENDENCY_PREFIX}/include"
-        "${DRILL_NATIVE_TOOLS_DIR}/iceberg-toolchain/env/include"
+        "${DRILL_NATIVE_TOOLS_DIR}/native-dependencies/include"
   REQUIRED)
 
 # Generate headers using the binary's matching Folly source. Only the runtime
@@ -66,7 +66,7 @@ target_include_directories(drill_native_dependencies SYSTEM BEFORE INTERFACE
   "${DRILL_NATIVE_DEPENDENCY_PREFIX}/include")
 # WindowFunction's public declarations transitively include RE2. Keep this
 # include fallback on the binder source, after all matching Velox/Folly and
-# system headers, so an SDK prefix cannot change unrelated dependency headers.
+# system headers, so a development prefix cannot change unrelated dependency headers.
 set_source_files_properties(src/plan/ExpressionBinder.cpp PROPERTIES
   COMPILE_OPTIONS "-idirafter;${DRILL_RE2_INCLUDE_DIR}")
 target_compile_definitions(drill_native_dependencies INTERFACE
@@ -85,10 +85,6 @@ add_library(drill_native_execution STATIC
   src/execution/NativeEngine.cpp
   src/columnar/ColumnarBatch.cpp
   src/columnar/DrillBatchMetadata.cpp
-  src/scan/NativeScanRegistry.cpp
-  src/scan/iceberg/IcebergScan.cpp
-  src/scan/iceberg/IcebergArrowBatch.cpp
-  src/scan/iceberg/IcebergOutput.cpp
   src/scan/jni/JniPluginScan.cpp
   src/exchange/DrillHash.cpp
   src/exchange/ReceiverInbox.cpp
@@ -199,15 +195,6 @@ set_target_properties(native_join_batch_test PROPERTIES BUILD_RPATH "${DRILL_NAT
 add_test(NAME native_join_batch COMMAND native_join_batch_test)
 set_tests_properties(native_join_batch PROPERTIES TIMEOUT 30)
 
-add_executable(native_iceberg_arrow_batch_test tests/scan/IcebergArrowBatchTest.cpp)
-target_link_libraries(native_iceberg_arrow_batch_test PRIVATE drill_native_execution)
-set_target_properties(native_iceberg_arrow_batch_test PROPERTIES BUILD_RPATH "${DRILL_NATIVE_CACHE}/lib")
-add_test(NAME native_iceberg_arrow_batch COMMAND native_iceberg_arrow_batch_test)
-add_executable(native_iceberg_nested_arrow_batch_test tests/scan/IcebergNestedArrowBatchTest.cpp)
-target_link_libraries(native_iceberg_nested_arrow_batch_test PRIVATE drill_native_execution)
-set_target_properties(native_iceberg_nested_arrow_batch_test PROPERTIES BUILD_RPATH "${DRILL_NATIVE_CACHE}/lib")
-add_test(NAME native_iceberg_nested_arrow_batch COMMAND native_iceberg_nested_arrow_batch_test)
-
 add_executable(native_expression_semantics_test tests/plan/ExpressionSemanticsTest.cpp)
 target_link_libraries(native_expression_semantics_test PRIVATE drill_native_execution)
 set_target_properties(native_expression_semantics_test PROPERTIES BUILD_RPATH "${DRILL_NATIVE_CACHE}/lib")
@@ -264,21 +251,6 @@ set_target_properties(native_engine_rpc_test PROPERTIES BUILD_RPATH "${DRILL_NAT
 add_test(NAME native_engine_rpc COMMAND native_engine_rpc_test)
 set_tests_properties(native_engine_rpc PROPERTIES TIMEOUT 40)
 
-# Public native scan module example. Share the engine API and dependency ABI.
-add_library(native_range_scan_plugin MODULE examples/scan/RangeScanPlugin.cpp)
-target_include_directories(native_range_scan_plugin PRIVATE src)
-target_link_libraries(native_range_scan_plugin PRIVATE drill_native_engine drill_native_dependencies)
-target_compile_options(native_range_scan_plugin PRIVATE
-  $<TARGET_PROPERTY:drill_native_dependencies,INTERFACE_COMPILE_OPTIONS>)
-set_target_properties(native_range_scan_plugin PROPERTIES
-  BUILD_RPATH "${DRILL_NATIVE_CACHE}/lib;${CMAKE_CURRENT_BINARY_DIR}")
-add_executable(native_scan_plugin_test tests/execution/NativeScanPluginTest.cpp)
-target_link_libraries(native_scan_plugin_test PRIVATE drill_native_engine drill_native_execution)
-set_target_properties(native_scan_plugin_test PROPERTIES
-  BUILD_RPATH "${DRILL_NATIVE_CACHE}/lib;${CMAKE_CURRENT_BINARY_DIR}")
-add_test(NAME native_scan_plugin COMMAND native_scan_plugin_test)
-set_tests_properties(native_scan_plugin PROPERTIES TIMEOUT 30
-  ENVIRONMENT "DRILL_NATIVE_SCAN_PLUGINS=$<TARGET_FILE:native_range_scan_plugin>")
 add_executable(native_drill_schema_test tests/plan/DrillSchemaTest.cpp)
 target_link_libraries(native_drill_schema_test PRIVATE drill_native_execution)
 set_target_properties(native_drill_schema_test PROPERTIES BUILD_RPATH "${DRILL_NATIVE_CACHE}/lib")

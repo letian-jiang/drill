@@ -43,7 +43,6 @@ import java.util.List;
 @JsonTypeName("iceberg-read")
 @SuppressWarnings("unused")
 public class IcebergSubScan extends AbstractBase implements SubScan,
-    org.apache.drill.exec.nativeexecution.scan.NativeScanProvider,
     org.apache.drill.exec.nativeexecution.scan.JniScanProvider {
 
   private static final String OPERATOR_TYPE = "ICEBERG_SUB_SCAN";
@@ -121,12 +120,6 @@ public class IcebergSubScan extends AbstractBase implements SubScan,
   @JsonIgnore
   public TableScan getTableScan() {
     return tableScan;
-  }
-
-  @Override
-  @JsonIgnore
-  public org.apache.drill.exec.nativeexecution.scan.NativeScanProvider.Descriptor nativeScan() {
-    return IcebergNativeScan.describe(this);
   }
 
   public int getMaxRecords() {

@@ -237,11 +237,10 @@ public abstract class SimpleParallelizer implements QueryParallelizer {
     boolean hasRemoteFragments = java.util.stream.StreamSupport.stream(planningSet.spliterator(), false)
         .anyMatch(wrapper -> wrapper.getNode() != rootFragment);
     boolean nativeExecution = options.stream().anyMatch(option ->
-        (option.name.equals(ExecConstants.NATIVE_FRAGMENT_STRICT.getOptionName())
-            || option.name.equals(ExecConstants.NATIVE_FRAGMENT_ENABLED.getOptionName())) && option.bool_val);
+        option.name.equals(ExecConstants.NATIVE_FRAGMENT_ENABLED.getOptionName()) && Boolean.TRUE.equals(option.bool_val));
     nativePlacementCandidates = null;
     if (hasRemoteFragments && nativeExecution) {
-      nativePlacementCandidates = FragmentEndpointPolicy.nativeCandidates(activeEndpoints, foremanNode);
+      nativePlacementCandidates = FragmentEndpointPolicy.nativeCandidates(activeEndpoints);
       if (foremanRootOnly) {
         nativePlacementCandidates = FragmentEndpointPolicy.candidates(nativePlacementCandidates, foremanNode, false);
       }

@@ -2,7 +2,7 @@
 
 日期：2026-10-07。状态：实验实现，供架构 Review。
 
-**采用同构 Java Drillbit：Java 保留规划、协调和完整 root fragment；每个节点内嵌 C++ NativeEngine，native 查询的所有非 root minor fragment 在 Velox 执行。Scan 可以使用 native reader，也可以通过 JNI 复用原 Java plugin reader。**
+**采用同构 Java Drillbit：Java 保留规划、协调和完整 root fragment；每个节点内嵌 C++ NativeEngine，native 查询的所有非 root minor fragment 在 Velox 执行。所有 scan 均通过 JNI 复用原 Java plugin reader。**
 
 本文按当前同构 RPC 实现整理，替代此前分散的设计草案。实验原始数据和日志留在工作区，不作为源码提交内容。章节中的“设计约定”描述要保持的契约，“已验证”描述已有证据；前者不表示已经覆盖 Drill 的全部算子、函数和 plugin。
 
@@ -14,12 +14,12 @@
 | Foreman | 保留原 SQL 规划、fragment 划分、minor assignment、状态协调和取消；执行完整 Java root fragment |
 | Native 模式 | 全部非 root minor 使用 native 后端；同节点 Foreman 也可以执行 native 非 root minor |
 | 计算 | 原 minor plan 在 C++ 转换为 Velox plan；fragment 内的计算、Sender/Receiver 和 driver 调度由 C++ 完成 |
-| Scan | Java plugin 负责规划；具备 native provider 的 scan 使用 native reader，其余 scan 使用通用 JNI reader |
-| 失败 | 未支持的算子、函数、类型、provider 或运行错误明确失败；没有 Java fragment fallback |
+| Scan | Java plugin 负责规划和读取；通用 JNI reader 将原批次导入 native |
+| 失败 | 未支持的算子、函数、类型或运行错误明确失败；没有 Java fragment fallback |
 | Schema | 允许在 Task 绑定前发现初始 schema；绑定后固定，变化时报错。暂不支持动态 schema |
 | 并行 | 每个 minor 对应一个 Velox Task；Task 内拆分 pipelines/drivers，多个 Task 共享进程线程池 |
 | 默认线程池 | CPU 池和 Scan/I/O 池分别按进程可用逻辑 CPU 数设置；Linux 下考虑 CPU affinity |
-| 当前验证 | 单节点 TPC-H SF1 Iceberg，跳过 Q5；对照 Java、native + JNI scan、native + SDK scan |
+| 当前验证 | 单节点 TPC-H SF1 Iceberg，跳过 Q5；对照 Java 与 native + JNI scan |
 
 普通 Java 查询继续使用原执行路径。native 模式中调用 Java reader 是预先选定的 scan 实现，不是运行失败后的 fragment 后端切换。Plugin 本来具有的数据库查询下推、投影下推等读取行为可以保留。
 
@@ -40,7 +40,7 @@ flowchart TB
       control[Native Control / Data 服务]
       converter[Minor plan converter]
       tasks[Velox Tasks / Pipelines / Drivers]
-      scans[Native Scan / JNI Scan]
+      scans[JNI Scan]
       exchange[Drill Sender / Receiver]
     end
     foreman -->|初始化 RPC| control
@@ -53,7 +53,7 @@ flowchart TB
 
 这里的 Foreman 是查询角色，native 是 fragment 执行后端，不形成第二种节点。一个节点可以同时是某查询的 Foreman 和 native worker；单节点场景下，root 在 Java，全部非 root 在本进程 NativeEngine。
 
-Java storage plugin 继续拥有 catalog、snapshot、统计、文件/分区枚举、work/split、affinity 和 SubScan 生成逻辑。NativeEngine 消费已分配给当前 minor 的工作描述，不重新做全表规划或跨 minor 分配。
+Java storage plugin 继续拥有 catalog、snapshot、统计、文件/分区枚举、work/split、affinity 和 SubScan 生成逻辑。JNI reader 消费已分配给当前 minor 的原 SubScan，不重新做全表规划或跨 minor 分配。
 
 Java `NativeExecutionService` 负责加载引擎、绑定当前 JVM/ScanHost、启动 native listeners 和关闭。JNI scan 借用本节点原有 plugin 服务；不启动第二个 JVM，也不在 reader 旁创建完整 Java Drillbit 或 Java FragmentExecutor。
 
@@ -86,7 +86,7 @@ Native 能力只决定候选节点和传输入口，不修改原 collectors、de
 
 ### 3.3 调度策略：候选节点、minor 宽度与工作分配
 
-调度保留原 Drill 并行化器。Native 集成改变执行候选集及后端路由，不另建一套集群调度器，也不把 native reader 的 split 队列用于跨节点重新分配 minor。
+调度保留原 Drill 并行化器。Native 集成改变执行候选集及后端路由，不另建一套集群调度器，也不把 JNI reader 的 work 队列用于跨节点重新分配 minor。
 
 **节点选择：**
 
@@ -99,7 +99,7 @@ Native 能力只决定候选节点和传输入口，不修改原 collectors、de
 
 当前单节点测试使用 Foreman 可参与策略：一个节点承载完整 Java root 和全部 native 非 root。多节点时 root-only 可以隔离 Foreman 的计算负载，但不自动创造 worker，也不能绕过 plugin 的硬 affinity。
 
-Native 就绪检查确认 control/data 服务能力，不等于预先验证该节点拥有每个 scan provider 或每个函数。各候选节点应装载查询所需 provider；当前缺失 provider 会在 native binding 时失败，尚未实现按 provider 清单筛选候选节点。
+Native 就绪检查确认 control/data 服务能力。Plugin 继续由所属 Java Drillbit 的原 registry 解析；算子和表达式支持性在 native 绑定时核对。
 
 **Minor 宽度：**
 
@@ -122,7 +122,7 @@ width = max(width, 1)
 
 - Soft affinity 在 native 候选集中优先分配有 affinity 的节点，剩余槽位沿用原随机起点轮转；不按 native Task 的实时队列长度重新 placement。
 - Hard affinity 必须满足原必需节点和 work 宽度约束。排除 Foreman 或未就绪 native 节点导致冲突时直接失败，不静默降低 affinity。
-- Endpoint assignment 后，由原 plugin 给各 minor 生成 SubScan/assigned work。JNI/native reader 均只消费当前 minor 的工作，不能重复枚举或跨 minor 领取。
+- Endpoint assignment 后，由原 plugin 给各 minor 生成 SubScan/assigned work。JNI reader 只消费当前 minor 的工作，不能重复枚举或跨 minor 领取。
 - 一次查询冻结 backend/地址和 destinations；运行中不迁移 minor、不跨节点 work stealing，也不在失败后重试为 Java fragment。
 
 ### 3.4 提交与执行顺序
@@ -161,7 +161,6 @@ Minor 数量表示 Drill 分配的任务数，driver 数量表示单 Task 内可
 |---|---|
 | 原通用 plugin 的不透明单 SubScan | 共享一个串行 reader/source，批次可以分发给多个下游 driver |
 | 显式声明独立 work 的 JNI scan | 多个 reader 从共享队列领取 work，各 work 执行一次；每个 reader 自身串行 |
-| Native provider 的多个 split | 每个 driver 创建 source，source factory 共享 split 队列，各 split 执行一次 |
 
 CPU 池与 I/O 池各默认使用可用逻辑 CPU 数，并不意味着两池合计只有该数量的线程。所有 Tasks 复用这两池；每个 Task 的 driver 上限也不代表同时占用对应数量的 CPU 线程。Reader 阻塞工作在 I/O 池中执行，driver 等待 future 并让出 CPU。
 
@@ -185,7 +184,7 @@ CPU 池与 I/O 池各默认使用可用逻辑 CPU 数，并不意味着两池合
 
 例如一个拥有 16 个可用 CPU 的单节点，某 major 分配 2 个 minor：创建 2 个 Task，各 Task 的 driver 上限为 16，但共同使用同一个 16 线程 CPU 池及另一个 16 线程 I/O 池。若 scan 只有一个不可拆 work，每个 Task 的 reader 仍串行；如果各 minor 有多个独立 splits，才可以并行读取。
 
-**主要入口：** [VeloxRuntime](src/execution/VeloxRuntime.cpp)、[JNI Scan](src/scan/jni/JniPluginScan.cpp)、[Native Scan 接口](src/scan/NativeScanPlugin.h)。
+**主要入口：** [VeloxRuntime](src/execution/VeloxRuntime.cpp)、[JNI Scan](src/scan/jni/JniPluginScan.cpp)。
 
 ## 5. 两类 JNI 的职责与数据所有权
 
@@ -199,7 +198,7 @@ CPU 池与 I/O 池各默认使用可用逻辑 CPU 数，并不意味着两池合
 
 ### 5.2 C++ → Java：Plugin Scan JNI
 
-调用方是 native scan source，目标是原 Java plugin reader。流程如下：
+调用方是 JNI scan source，目标是原 Java plugin reader。流程如下：
 
 ```text
 assigned SubScan descriptor
@@ -223,8 +222,7 @@ JNI source 当前最多预取两批；单 reader 不并发 `next()`。取消可�
 
 | 路径 | Java 工作 | 批次数据跨 JNI |
 |---|---|---|
-| Native scan | SQL/plugin 规划、生成 descriptor、节点生命周期 | 无 scan 数据跨 JNI |
-| JNI scan | 上述职责，加原 plugin reader 读取 | 有，按批导入 |
+| JNI scan | SQL/plugin 规划、节点生命周期、原 plugin reader 读取 | 有，按批导入 |
 | Native 计算 / native exchange | Java 协调，root 仍在 Java | 默认计算及 exchange 不经 JNI；root 输出走 RPC |
 
 **主要入口：** [NativeEngineJni](src/jni/NativeEngineJni.cpp)、[ScanHost](java/src/main/java/org/apache/drill/exec/nativeexecution/scan/ScanHost.java)、[PluginScanReader](java/src/main/java/org/apache/drill/exec/nativeexecution/scan/PluginScanReader.java)（包含通用 reader）、[ScanContext](java/src/main/java/org/apache/drill/exec/nativeexecution/scan/ScanContext.java)。
@@ -258,7 +256,7 @@ Foreman 保留原 Drill 物理计划。Serializer 只补充 scan descriptor 和�
 
 | 原 Drill 算子 | 当前 native 转换方式 | 主要约束 |
 |---|---|---|
-| Scan | NativeScanPlugin 或 JNI BatchSource | provider、固定 schema、类型及 buffer 布局必须支持 |
+| Scan | JNI BatchSource + 原 Java plugin reader | 原 reader 服务依赖、固定 schema、类型及 buffer 布局必须支持 |
 | Unordered/Merging Receiver | DrillReceiver；有序路径补排序/汇聚 | 按原 collectors 和 sender 完成条件 |
 | Project / Filter | Velox Project / Filter | 原函数及字段类型必须能够绑定；通配符在 schema 绑定时展开 |
 | Hash/Streaming Aggregate | Velox Aggregation，必要的 local partition/gather | 保留原 fragment 的聚合阶段；转换 `$sum0`、single_value 等 Drill 语义 |
@@ -275,89 +273,17 @@ Foreman 保留原 Drill 物理计划。Serializer 只补充 scan descriptor 和�
 
 该表是转换路径清单，不是所有函数签名、join 条件、嵌套类型及 NULL 组合均已验证的声明。例如前次 plugin 测试发现 `MOD` lowering 未支持；选择 CASE 的 reader 测试不构成 MOD 已修复的证据。
 
-支持判断分层进行：Java 决定 native 后端和 scan 路径；C++ 检查 operator/provider；拿到 source schema 后检查类型和表达式；批次检查 schema/布局。能够在提交前确定的问题应早报，依赖运行时 schema 的问题允许在 Task 绑定时失败。每层都不选择 Java fragment fallback。
+支持判断分层进行：Java 决定 native 后端并补充 JNI descriptor；C++ 检查 operator/JNI reader binding；拿到 source schema 后检查类型和表达式；批次检查 schema/布局。能够在提交前确定的问题应早报，依赖运行时 schema 的问题允许在 Task 绑定时失败。每层都不选择 Java fragment fallback。
 
 Q5 按用户要求跳过，当前验收是其余 21 条；不能据此宣称整个 TPC-H 22 条或所有非 scan Drill 算子已经完整覆盖。
 
 **主要入口：** [FragmentPlanConverter](src/plan/FragmentPlanConverter.cpp)、[ExpressionBinder](src/plan/ExpressionBinder.cpp)、[DrillOperators](src/velox/operators/DrillOperators.cpp)。
 
-## 8. Native Scan 开发者接口
+## 8. 类型映射、固定 Schema 与 Drill 语义
 
-### 8.1 Java：只交付已分配的读取描述
+### 8.1 标量类型映射
 
-公开接口是 `org.apache.drill.exec.nativeexecution.scan.NativeScanProvider`。Plugin 的 SubScan 可实现：
-
-```java
-Descriptor nativeScan();
-
-Descriptor(String provider, int version,
-           List<MaterializedField> readFields,
-           List<MaterializedField> outputFields,
-           LogicalExpression filter, String json);
-```
-
-`provider/version` 定位 reader 实现及其 descriptor 格式；`json` 是 provider 自定义的对象，保存已分配 splits、文件位置、常量列等。公共 serializer 写入权威的 `provider/version/readFields/outputFields/filter`，provider 不能用 payload 覆盖这些字段。
-
-`readFields` 包含读取和过滤所需字段，`outputFields` 定义 scan 对上游输出的列及 Drill 类型，filter 由通用 native converter 执行。Plugin 自身已做的下推要与 descriptor 保持一致，避免重复或遗漏语义。
-
-未实现接口或返回 `null`，执行前选择通用 JNI scan。提交了 native descriptor 后遇到未知 provider、版本不符或读取错误则失败，不重新打开 Java reader。Plugin 统一引用公开的 `nativeexecution.scan.NativeScanProvider`；旧包名别名已清理。
-
-### 8.2 C++：Reader 与执行器解耦
-
-```cpp
-class NativeScanPlugin {
- public:
-  virtual std::string_view provider() const = 0;
-  virtual uint32_t descriptorVersion() const = 0;
-  virtual NativeScanBinding prepare(
-      const NativeScanRequest&, const NativeScanContext&) const = 0;
-};
-```
-
-这是接口摘要，完整声明见 [NativeScanPlugin.h](src/scan/NativeScanPlugin.h)。`prepare()` 返回：
-
-| 成员 | 职责 |
-|---|---|
-| `schema` | Reader 输出的固定 Velox RowType，附带需要保留的 Drill 字段描述 |
-| `factory` | 每 driver 的 BatchSource 工厂；共享 assigned work 队列，避免重复扫描 |
-| `normalizeOutput` | 可选 provider 表示转换；例如 Iceberg TIME/时间戳及嵌套值输出适配 |
-
-公共 converter 在 source 上方完成 filter/output projection。`normalizeOutput` 是静态表示转换，不是动态 schema 修复工具；被下推的 filter 也需要与 reader 原始表示匹配。
-
-Context 提供 plan pool、公共 I/O executor 和 cancellation token。Request/context 只在 `prepare()` 调用期间借用，返回的 factory 必须拥有 descriptor/work；reader 使用 driver pool，异步操作必须维持其 pool 与 buffers 的有效期。
-
-`BatchSource::next(future)` 定义三种返回：
-
-- 有值、vector 非空：DATA，包含有效 RowVector。
-- 有值、vector 为空：WAIT，同时提供有效 future。
-- `nullopt`：EOS。
-
-Cancel 应能重复调用；异常使 Task 失败。正常 EOF 关闭当前 reader 后可领取下一 work，不能取消其他 driver 的 reader。
-
-### 8.3 注册与模块加载
-
-`NativeScanRegistry` 统一注册、版本核对和 binding 检查。内建 Iceberg 通过同一接口注册；minor runtime 没有硬编码 Iceberg provider 分支。
-
-外部模块通过 `.so` 导出入口注册：
-
-```cpp
-extern "C" void drill_register_native_scan_plugins_v1(
-    drill::nativeexec::NativeScanRegistry* registry);
-```
-
-当前 loader 读取 `DRILL_NATIVE_SCAN_PLUGINS` 指定的模块。模块、plugin、factory 和 reader 的生命周期相互保留，异步回调和释放函数完成前不能卸载模块。重复 provider、未知 provider、descriptor 版本错误和无效 binding 明确失败。
-
-这是基于当前 Velox/Folly 工具链的 **C++ 扩展 API**，`extern "C"` 仅稳定入口名，不构成通用 C ABI。开发者需使用匹配的编译器、依赖和 ABI；本轮不设计跨版本插件兼容体系。
-
-内建 Iceberg reader 消费原 Java 规划的 FileScanTask/split、字段 ID、范围、常量列及 delete 描述。当前实测的数据文件是本地 Parquet，delete 路径包含 Parquet/Avro；不据此承诺任意远端存储和全部 Iceberg 特性。
-
-**开发入口：** [NativeScanProvider](java/src/main/java/org/apache/drill/exec/nativeexecution/scan/NativeScanProvider.java)、[NativeScanRegistry](src/scan/NativeScanRegistry.h)、[IcebergScan](src/scan/iceberg/IcebergScan.cpp)、[RangeScan 外部模块示例](examples/scan/RangeScanPlugin.cpp)、[完整接入说明](README.md#开发者接口接入-native-scan)。
-
-## 9. 类型映射、固定 Schema 与 Drill 语义
-
-### 9.1 标量类型映射
-
-下表描述当前通用 JNI/Drill wire 桥接和 native 计算边界。Native provider 可以使用自己的读取表示，但交给通用计算/输出路径前须明确绑定和转换规则；不能仅因 SDK 支持某类型就宣称 Drill native 已支持。
+下表描述当前通用 JNI/Drill wire 桥接和 native 计算边界。原 plugin reader 的输出遵循 Drill 类型和布局，绑定后的字段树保持固定。
 
 | Drill 类型 | Velox 类型 / 存储 | 导入与输出规则 |
 |---|---|---|
@@ -370,12 +296,12 @@ extern "C" void drill_register_native_scan_plugins_v1(
 | VARBINARY | VARBINARY / StringView | 保留任意 bytes，包括 NUL/非 UTF-8；不能作为字符串解码 |
 | VARDECIMAL(p,s) | DECIMAL(p,s)，short int64 / long int128 | Drill 有符号大端变长 unscaled integer ↔ native 定宽 unscaled integer；保留 p/s，不转 DOUBLE |
 | DATE | DATE / int32 days | Drill int64 epoch 毫秒 ↔ UTC epoch 天数；导入要求午夜整天且天数不溢出 |
-| TIME | TIME / int64 毫秒 | Drill int32 毫秒扩展为 native int64；输出检查 int32 范围；SDK 微秒表示需显式转换 |
+| TIME | TIME / int64 毫秒 | Drill int32 毫秒扩展为 native int64；输出检查 int32 范围 |
 | TIMESTAMP | TIMESTAMP / seconds + nanos | Drill int64 epoch 毫秒分解成 seconds/nanos，正确规范化负 epoch；输出回毫秒 |
 
-Decimal 计算结果的 precision/scale、溢出和 cast 规则由表达式/聚合适配负责。Temporal 的上述映射不增加时区类型；SDK 原精度 filter 与输出毫秒规范化顺序按 provider 契约处理，不在导入时无条件提前丢弃 filter 所需精度。
+Decimal 计算结果的 precision/scale、溢出和 cast 规则由表达式/聚合适配负责。Temporal 的上述映射不增加时区类型；JNI 导入保留原 Drill reader 的毫秒表示。
 
-### 9.2 复合类型、Mode 与向量编码
+### 8.2 复合类型、Mode 与向量编码
 
 | Drill 类型或属性 | Native 表示 | 语义与限制 |
 |---|---|---|
@@ -394,7 +320,7 @@ Drill 的 REQUIRED/OPTIONAL/REPEATED 是字段语义和 wire 布局属性，不�
 
 Velox Flat/Constant/Dictionary 是**向量编码**，不等同于 Drill DICT 类型。计算及本地 exchange 可以使用这些编码，编码回 Drill wire 时通过 decoded vector/选择行规范化；原 Selection Vector 的移除也不修改字段逻辑类型。
 
-### 9.3 未支持类型及支持判定
+### 8.3 未支持类型及支持判定
 
 当前通用列式桥接没有直接支持 TINYINT、SMALLINT、无符号整数、旧固定/稀疏 DECIMAL、INTERVAL、带时区 temporal、异构 UNION 或动态 LIST element。此清单指原字段直接过桥；若原计划或 reader 已合法输出支持类型，按最终字段绑定，不人为禁止对应 SQL 来源。
 
@@ -404,11 +330,11 @@ Velox Flat/Constant/Dictionary 是**向量编码**，不等同于 Drill DICT 类
 
 **类型实现入口：** [NativeColumnarBridge](java/src/main/java/org/apache/drill/exec/physical/impl/velox/NativeColumnarBridge.java)、[ScanBatchLayout](java/src/main/java/org/apache/drill/exec/nativeexecution/scan/ScanBatchLayout.java)、[ColumnarBatch](src/columnar/ColumnarBatch.cpp)、[DrillArrayType](src/columnar/DrillArrayType.h)、[DrillMapType](src/columnar/DrillMapType.h)、[DrillDict lookup](src/velox/functions/DrillDict.cpp)。
 
-### 9.4 固定 Schema 与输出元数据
+### 8.4 固定 Schema 与输出元数据
 
 Velox RowType 不能单独表达 Drill 的全部字段属性。Native 路径保留 Drill `MaterializedField/MajorType` 元数据，包括 REQUIRED/OPTIONAL/REPEATED、precision/scale、嵌套子字段、其他类型属性和 proto2 presence。
 
-当前通用批次桥接覆盖 INT、BIGINT、FLOAT4、FLOAT8、BIT、VARCHAR、VARBINARY、DATE、TIME、TIMESTAMP、VARDECIMAL，以及已支持叶子类型组成的 MAP、DICT、REPEATED 和同质 LIST 树。类型可导入不等于该类型的全部运算可绑定；新增类型需同时覆盖读取布局、表达式、hash、输出字段和 exchange。时间输出遵循 Drill 毫秒表示，SDK 原精度过滤与输出转换顺序保持明确。
+当前通用批次桥接覆盖 INT、BIGINT、FLOAT4、FLOAT8、BIT、VARCHAR、VARBINARY、DATE、TIME、TIMESTAMP、VARDECIMAL，以及已支持叶子类型组成的 MAP、DICT、REPEATED 和同质 LIST 树。类型可导入不等于该类型的全部运算可绑定；新增类型需同时覆盖读取布局、表达式、hash、输出字段和 exchange。时间输入输出均遵循 Drill 毫秒表示。
 
 元数据绑定到各自的 batch/output RowType，不能修改共享 primitive Type。JNI 缓存 layout 与普通 columnar type 都必须携带原字段描述。Project、Aggregate、Join、Window、Flatten、Union 转换后根据输出语义传递或构造字段属性；outer join 只将对应侧放宽为 nullable。
 
@@ -420,7 +346,7 @@ Drill wire 输出的字段声明必须与 buffer 布局一致。REQUIRED 列使�
 
 **主要入口：** [DrillSchema](src/plan/DrillSchema.cpp)、[DrillRowType](src/columnar/DrillRowType.h)、[ColumnarBatch](src/columnar/ColumnarBatch.cpp)、[DrillBatchMetadata](src/columnar/DrillBatchMetadata.cpp)。
 
-## 10. 代码目录与修改边界
+## 9. 代码目录与修改边界
 
 Native 代码全部位于 `drill/native-execution`：
 
@@ -438,58 +364,44 @@ drill/native-execution/
     exchange/         Sender buffers、Receiver inbox、Drill hash
     columnar/         Drill buffers ↔ native vectors、字段元数据
     scan/
-      NativeScanPlugin.h / NativeScanRegistry.* / ScanReader.h
+      ScanReader.h
       jni/            通用 Java reader bridge
-      iceberg/        内建 native reader provider
     jni/              Java Drillbit → NativeEngine 生命周期接口
-  examples/scan/      可加载的 RangeScan 模块
   tests/              执行、协议、schema、reader、取消与模块测试
 ```
 
 Java scan 公共接口、JNI scan bridge 和 columnar layout 源码位于 `native-execution/java/`，由 `exec/java-exec` 作为附加 source roots 编译/打包，保持原包名和 JNI 签名。节点生命周期和调度扩展仍位于 `exec/java-exec/`；serializer/columnar bridge 保留历史 `physical/impl/velox/` 包名，不表示仍采用 Velox4J 或旧宿主方案。
 
-修改原 Drill 的集中边界是节点生命周期与 endpoint 发布、并行化候选/路由、fragment 初始化协议、Java root 的批次接收，以及必要的语义修复。原 plugin 的读取实现不因通用 JNI 接入而改写；plugin 选择 native reader 时，只需增加 descriptor 接口实现和对应 C++ provider。
+修改原 Drill 的集中边界是节点生命周期与 endpoint 发布、并行化候选/路由、fragment 初始化协议、Java root 的批次接收，以及必要的语义修复。原 plugin 的读取实现不因通用 JNI 接入而改写；可选 JniScanProvider/PluginScanFactory 仅描述原 Java reader 及可独立读取的 work。
 
 旧独立 worker 启动/注册和 Velox4J 执行器已移除；独立 scan 宿主和 plugin context facade 已移除；Java scan 回归借用真实 Drillbit，C++ JNI 回归使用测试专用 JVM。详细文件定位见 [CODE_STRUCTURE](CODE_STRUCTURE.md)，当前职责以本文和所链接的实现为准。
 
-## 11. 已有验证与性能验收
+## 10. 验证与性能结果
 
-| 范围 | 最新证据 | 结论与限制 |
-|---|---|---|
-| Generic JNI plugin | CSV/JSON/Parquet、JDBC/H2、sys.drillbits、information_schema.TABLES；11 个读取场景 | 每侧 209039 行一致；10 个非空结果完整 MajorType 一致；所选 312 个 plugin main 文件未改且与 HEAD 一致 |
-| 固定 schema 边界 | JSON 后续批次新增字段 | Native 明确失败，reader 清零；不是动态 schema 支持 |
-| 生命周期/接口测试 | 44 个 Java 测试、23 个 CTest | 均通过；外部模块真实加载，4 driver 消费 4000 行一次，并覆盖取消及注册错误 |
-| 当前 SF1 正确性 | JNI、SDK 各 21 条，跳过 Q5 | 42 次完整结果与修正 Java 基线一致；272 个非 root minor 均 native；每组一个节点注册 |
-| 当前 SF1 性能 | 最新 schema/API 修改后仅做上述单次正确性回归 | 未重新完成重复性能测量，不能把历史比值直接视作当前二进制的验收结果 |
+本轮移除后的构建通过 120 个 Java 测试、20 项 CTest、Checkstyle 和 RAT。单节点 SF1 除 Q5 外的 21 条完整结果与 Java 参考一致；136 个非 root minor 全部 native，所有 scan 均经 JNI。该轮每条执行一次用于正确性与路径回归，不作为重复性能测量。
 
-上述 plugin 结果证明所选原 reader 可以免修改接入，不保证所有 plugin、服务依赖、JDBC driver、远端存储和 SQL 组合均兼容。遇到通用 scan 服务缺口应优先补公共 bridge；不能用这些缺口要求所有 plugin 改写 reader。
+通用 JNI 路径的回归包括 CSV/JSON/Parquet、JDBC/H2、sys 和 information_schema 原 reader，复杂字段/时间/Decimal 布局、取消与资源关闭，以及完整 Java root 与 native RPC 的生命周期。绑定后动态 schema 明确失败；这些用例不代表全部 plugin 和 SQL 组合均已覆盖。
 
-历史同构 RPC 性能轮次使用同一单节点、相同 16 个可用 CPU、planner max width 1；Java/JNI/SDK 每条 2 次预热、3 次测量，共 315 次执行。按每条 wall time 中位数汇总：
+性能结果来自本次清理前的同构 JNI 引擎，不能直接视为删除后的二进制验收。单节点 TPC-H SF1 Iceberg 的 Q1/Q2/Q6/Q16/Q21，每组相同 16 核、2 次预热、3 次测量：
 
-| 后端 | 21 条中位数之和 | Java/该后端 | 单条更快 | 最小单条比值 |
-|---|---:|---:|---:|---:|
-| Java | 77.550 s | 1.00× | — | — |
-| Native + JNI scan | 14.606 s | 5.31× | 21/21 | Q16：1.86× |
-| Native + SDK scan | 6.307 s | 12.30× | 21/21 | Q16：2.90× |
+| 对比 | 五条查询中位数之和 | Java/JNI 比值 |
+|---|---:|---:|
+| Java minor 上限 4 | 7.711 s | 1.59× |
+| Java minor 上限 8 | 7.855 s | 1.62× |
+| Java minor 上限 16 | 8.743 s | 1.81× |
+| Java 每条从上述三档取较优值 | 6.761 s | 1.40× |
+| JNI，每 major 一个 minor、Task 最多 16 driver | 4.840 s | — |
 
-这些是归档源码/二进制和该环境的结果，早于本轮 schema/API 修改；不表示默认并行宽度、其他机器或当前构建已有相同收益。排除 Q19 后，历史 JNI/SDK 总和比值仍为 4.74×/10.84×。
+100 次执行结果一致。各组统一 4GB heap/8GB direct memory，并开启原 Java HashJoin 的内存内回退以避免 Q2 分区预算检查失败。该选项仅影响原 Java HashJoin 内存策略。minor 上限不表示每个 major 都有该数量；scan 宽度还受 work 数量约束。
 
-后续性能验收沿用用户目标：**JNI 每条快于 Java；SDK 整套至少 3×且每条快于 Java。** 整套比值定义为 `Σ(Java 单条中位数) / Σ(Native 单条中位数)`，不平均单条 speedup。测量同时核对结果、全部非 root 的实际后端、scan 路径、注册数、reader 与进程关闭；不以偶然单次耗时宣称达标。
+同一当前版本的单 driver 控制实验保留 16 个 CPU/I/O 线程，每条 pipeline 一个 driver，五条合计相对低宽度 Java 为 1.33×，Q6 接近持平。不能将多 driver 相对低宽度 Java 的收益归结为单线程计算提升，也不能把五条的结果推广到全部 21 条查询。
 
-当前采用 Q5 以外的 21 条作为约定验收集合；恢复 Q5 后再声明 22 条全套结果。SDK 不要求每条达到 3×。SF10 可以用于规模验证，按用户约定无需每条跑 10 次，也不要求本轮完整跑完。
+用户性能目标仍为 JNI 每条快于 Java。后续用 Java 充分并行作为对照，单独核对 reader/import、native 计算、exchange 和 root 的耗时；Q5 按约定跳过。实验原始数据和工具留在工作区，不随源码提交。
 
-证据入口：严格 plugin 审计（实验工作区归档）、测试汇总（实验工作区归档）、当前 SF1 汇总（实验工作区归档）、历史性能汇总（实验工作区归档）、历次实现与结果报告（实验工作区归档）。
+## 11. 本次 Review 的核心边界
 
-## 12. 本次 Review 的核心取舍与后续工作
+1. NativeEngine、JNI plugin reader 桥接和原 Drill 执行协议接入：完整 root 保留 Java，全部非 root 在 native 执行。
+2. 原节点注册发布 native control/data 能力，保持同一 Drillbit 身份。
+3. 保留原并行化器的 minor/affinity 模型，增加 native 候选与冻结路由。
 
-本版建议保持以下取舍，便于把计算推进 native 而控制对 Drill 的侵入：
-
-1. **以 minor 为 native 执行边界，完整 root 保留 Java。** 原 SQL、规划、assignment 和 query 管理继续复用；不在每个计算算子间来回调用 JNI。
-2. **所有非 root 统一 native，scan 实现提前选择。** 通用 JNI reader 是兼容入口；native provider 是增量优化入口。两者使用同一 native 计算/exchange 后端，运行中错误直接失败。
-3. **控制和 root 输出统一 RPC，本地 native exchange 直接传向量。** 目前优先维持同/跨进程一致的消息契约；后续优化回环 transport 时只替换传输，不改变路由和职责。
-4. **Plugin 继续拥有数据规划，native scan 只消费分配结果。** Reader 接口独立于 minor runtime，新增 provider 不增加执行器内的插件分支。
-5. **固定 schema 先完整推进。** 保留 Drill 字段语义、批次所有权和消费一次；动态 schema 不加入当前开发计划。
-
-后续工作按上述边界推进：先对最新 schema/API 构建重跑单节点重复性能测量，核对既定 JNI/SDK 目标；补齐固定 schema 的算子/函数、空结果 header 及更多 plugin 服务测试；针对 reader/import、CPU 算子、exchange 与 Java root 的真实占比优化。Q5 单独保留为待恢复项；本轮不新增双节点基准。
-
-本次主要需要 Review 的是上述执行边界、类型映射、minor/driver 调度策略、两类 JNI、通信路径和 provider 契约。文档中列出的支持限制是实现清单，不通过 Java fallback 隐藏。
+计算没有 Java fragment fallback。Scan 统一复用原 Java plugin；本分支不包含 C++ scan provider、SDK reader 或外部 scan 模块加载。独立正确性修复保证 Java/plugin 读取与 native 结果一致。

@@ -18,14 +18,12 @@
  */
 #pragma once
 #include "velox/plan/DrillPlanNodes.h"
-#include "scan/NativeScanPlugin.h"
 #include <folly/dynamic.h>
 namespace drill::nativeexec {
 struct SourceBinding {
   RowTypePtr schema;
   SourceKind kind;
   SourceFactory factory;
-  NormalizeScanOutput normalizeOutput{};
 };
 using BindSource = std::function<SourceBinding(const folly::dynamic &)>;
 using BindSender =

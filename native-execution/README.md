@@ -1,6 +1,6 @@
 # Drill Native Execution（Experimental）
 
-同构 Java Drillbit 内嵌 C++ NativeEngine：Java 保留 SQL 规划、协调和完整 root；native 查询的所有非 root minor 转换为 Velox Task。Scan 使用可选 native provider 或通用 JNI 原 plugin reader，计算不回退到 Java fragment。
+同构 Java Drillbit 内嵌 C++ NativeEngine：Java 保留 SQL 规划、协调和完整 root；native 查询的所有非 root minor 转换为 Velox Task。Scan 统一通过 JNI 复用原 Java plugin reader，计算不回退到 Java fragment。
 
 [设计方案](DESIGN.md)包含类型映射、minor/driver 调度、两类 JNI 和通信契约；[目录说明](CODE_STRUCTURE.md)定位实现。动态 schema 暂不支持，绑定后变化明确失败。
 
@@ -10,7 +10,7 @@ JNI scan 桥接、scan 接口和字段/buffer 布局位于 `java/src/main/java/`
 
 ## 构建与依赖
 
-当前工具链面向 Linux amd64 / AVX2，C++20、JNI JDK、CMake 3.28+、Ninja，以及 Boost/Folly 开发依赖和 RE2。Iceberg SDK 单独使用 C++23/Arrow 工具链。
+当前工具链面向 Linux amd64 / AVX2，C++20、JNI JDK、CMake 3.28+、Ninja，以及 Boost/Folly 开发依赖和 RE2。
 
 ```sh
 # 在 Drill 仓库根目录。参数为已有 Boost/Folly 开发依赖安装前缀。
@@ -32,50 +32,19 @@ mvn -pl exec/java-exec,contrib/format-iceberg,contrib/format-paimon,contrib/stor
 
 ```sql
 ALTER SESSION SET `exec.native_fragment.enabled` = true;
-ALTER SESSION SET `exec.native_scan.enabled` = true;
 ```
 
-`exec.native_fragment.strict` 同样启用全非 root native 模式；没有计算 fallback。关闭 native scan 选项时仍执行 native fragment，只改用原 Java plugin reader。`exec.foreman.root_only` 控制是否排除 Foreman 的非 root placement；单节点须为 false。
+`exec.native_fragment.enabled` 启用全部非 root native 执行；不支持的计算明确失败。`exec.foreman.root_only` 控制是否排除 Foreman 的非 root placement，单节点须为 false。`exec.native_scan.batch_records` 设置托管 JNI reader 的默认批次记录数。
 
-## Native scan 开发者接口
+## JNI plugin reader
 
-Java SubScan 实现 [NativeScanProvider](java/src/main/java/org/apache/drill/exec/nativeexecution/scan/NativeScanProvider.java)，只提供已分配工作描述：
+原 SubScan 自动装饰为 `drill-java-subscan` descriptor，由 [PluginScanReader](java/src/main/java/org/apache/drill/exec/nativeexecution/scan/PluginScanReader.java) 使用本节点原 registry、BatchCreator 和 scan 服务打开 reader。原 plugin 无需为通用接入修改代码。批次按 buffer 地址/长度数组导入 C++ owned vectors，绑定后的 schema 必须固定。
 
-```java
-@Override
-public NativeScanProvider.Descriptor nativeScan() {
-  return new NativeScanProvider.Descriptor(
-      "acme-parquet", 1, readFields, outputFields, pushedFilter, descriptorJson);
-}
-```
-
-`provider/version` 标识 C++ reader 和 descriptor 格式。`json` 保存当前 minor 的 assigned splits 或其他读取参数；serializer 写入权威的 provider/version/readFields/outputFields/filter。返回 null 或不实现接口，自动使用 generic JNI reader，不要求原 plugin 改写 reader。
-
-C++ provider 实现 [NativeScanPlugin](src/scan/NativeScanPlugin.h)：
-
-```cpp
-class AcmeScan final : public drill::nativeexec::NativeScanPlugin {
- public:
-  std::string_view provider() const override { return "acme-parquet"; }
-  uint32_t descriptorVersion() const override { return 1; }
-  NativeScanBinding prepare(const NativeScanRequest& request,
-                            const NativeScanContext& context) const override;
-};
-extern "C" void drill_register_native_scan_plugins_v1(
-    drill::nativeexec::NativeScanRegistry* registry) {
-  registry->registerPlugin(std::make_shared<AcmeScan>());
-}
-```
-
-`prepare` 返回固定 schema、每 driver 的 source factory 和可选 normalizeOutput。Filter/output projection 由公共 converter 执行；provider 封装自身表示转换。Factory 拥有 descriptor/work，共享 work 队列使每 split 消费一次。Context 只在 prepare 期间借用；异步 reader 保持 pool 与 buffers 有效。
-
-`BatchSource::next(future)`：有值且 vector 非空为 DATA；有值但 vector 为空为 WAIT，须有有效 future；nullopt 为 EOS。Cancel 可重复调用，失败终止 Task。
-
-外部模块通过 `DRILL_NATIVE_SCAN_PLUGINS` 加载；未知 provider、版本错误和重复注册失败。该接口依赖匹配的 C++/Velox/Folly ABI，extern C 仅保证入口名。[RangeScan 示例](examples/scan/RangeScanPlugin.cpp)和[模块测试](tests/execution/NativeScanPluginTest.cpp)展示真实模块加载与多 driver 工作消费；内建 [Iceberg](src/scan/iceberg/IcebergScan.cpp)使用同一接口。
+可选 [JniScanProvider](java/src/main/java/org/apache/drill/exec/nativeexecution/scan/JniScanProvider.java) 可声明 `independentWorkList`，允许多个 driver 领取互不重叠的 work；未声明时保持一个串行 reader/source。专用 [PluginScanFactory](java/src/main/java/org/apache/drill/exec/nativeexecution/scan/PluginScanFactory.java) 仍复用原 Java reader，适用于保留 Iceberg planned snapshot 和逐 work reader 的优化。Reader 不执行 Java fragment 计算或 exchange。
 
 ## 回归验证
 
-C++/JNI tests 覆盖批次编码、RPC、取消、复杂类型、schema、native scan 模块和 reader 生命周期，直接通过上述 CTest 命令执行，不依赖 TPC-H 数据。生产路径没有 JNI fragment 提交或 root/status callback。
+C++/JNI tests 覆盖批次编码、RPC、取消、复杂类型、schema 和 reader 生命周期，直接通过上述 CTest 命令执行，不依赖 TPC-H 数据。生产路径没有 JNI fragment 提交或 root/status callback。
 
 ```sh
 mvn -pl exec/java-exec -am package \
@@ -88,26 +57,6 @@ mvn -pl exec/java-exec -am package \
 
 [通用 plugin SQL 集成测试](../contrib/storage-jdbc/src/test/java/org/apache/drill/exec/store/jdbc/TestNativeGenericPluginCompatibility.java)覆盖未改源码的 CSV/JSON/Parquet、JDBC/H2、sys 与 information_schema。执行时设置 `drill.native.plugin_compat.output`，并用 `DRILL_NATIVE_PLAN_DIR` / `DRILL_NATIVE_STATS_DIR` 指定该输出下 plans/stats 目录。
 
-## 可选 Iceberg SDK
-
-JNI scan 不需要 Iceberg C++ SDK。内建 native Iceberg provider 的独立 reader 使用以下构建入口：
-
-```sh
-python3 -m venv .tools/iceberg-python
-.tools/iceberg-python/bin/pip install pyarrow==25.0.1
-DRILL_NATIVE_PYTHON="$PWD/.tools/iceberg-python/bin/python" \
-  native-execution/iceberg/build.sh
-```
-
-执行时通过 `DRILL_NATIVE_ICEBERG_LIBRARY` 指定 reader library，并将 SDK 工具链的 `env/lib` 加入 `LD_LIBRARY_PATH`，使用匹配的 C++ runtime。保留的 [SDK C ABI 测试](tests/scan/test_iceberg_task_reader.py)自动生成临时小数据，验证 split、partition constants、delete、Arrow ownership 与错误处理：
-
-```sh
-export LD_LIBRARY_PATH="$PWD/.tools/iceberg-toolchain/env/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export DRILL_NATIVE_ICEBERG_LIBRARY="$PWD/.tools/iceberg-build/libdrill_iceberg_reader.so"
-.tools/iceberg-python/bin/python native-execution/tests/scan/test_iceberg_task_reader.py \
-  --library "$DRILL_NATIVE_ICEBERG_LIBRARY"
-```
-
 ## 源码提交范围
 
-此变更包含执行代码、接口、必要回归 tests、构建文件和设计说明。TPC-H SQL、大数据生成、计时比较和 benchmark 集群启动工具留在实验工作区。Dependency cache、数据文件、profiles、运行结果、日志和历史 PoC 不随源码提交。旧 Velox4J runtime、Java fragment wrapper/fallback、完整 worker bootstrap 和独立 C++ worker/ZooKeeper C 注册代码已移除。
+此变更包含 native 执行、JNI scan、必要回归 tests、构建文件和设计说明。TPC-H SQL、大数据生成、计时比较和 benchmark 集群启动工具留在实验工作区。Dependency cache、数据文件、profiles、运行结果、日志和历史 PoC 不随源码提交。旧 Velox4J runtime、Java fragment wrapper/fallback、完整 worker bootstrap、独立 C++ worker/ZooKeeper C 注册，以及 native scan/SDK/provider 代码已移除。

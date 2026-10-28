@@ -20,8 +20,6 @@
 #include "columnar/DrillBatchMetadata.h"
 #include "exchange/SenderBuffer.h"
 #include "plan/FragmentPlanConverter.h"
-#include "scan/iceberg/IcebergArrowBatch.h"
-#include "scan/NativeScanRegistry.h"
 #include "scan/jni/JniPluginScan.h"
 #include <chrono>
 #include <condition_variable>
@@ -652,16 +650,7 @@ void MinorTaskRegistry::run(const std::shared_ptr<Minor> &minor) {
             return SourceBinding{binding.schema, SourceKind::JniScan,
                                  std::move(binding.factory)};
           }
-          VELOX_USER_CHECK(node.count("nativeScan"),
-                           "Plugin {} has no native scan descriptor; JNI "
-                           "ScanHost is required",
-                           pop);
-          auto &scan = node["nativeScan"];
-          auto binding = NativeScanRegistry::instance().bind(scan,
-              {leaf.get(), runtime_.io(), minor->scanCancellation.getToken()});
-          return SourceBinding{binding.schema, SourceKind::NativeScan,
-                               std::move(binding.factory),
-                               std::move(binding.normalizeOutput)};
+          VELOX_USER_FAIL("Plugin {} has no JNI scan descriptor", pop);
         },
         [&](const folly::dynamic &node, const RowTypePtr &schema) {
           minor->outputFields = fieldsFromType(schema);

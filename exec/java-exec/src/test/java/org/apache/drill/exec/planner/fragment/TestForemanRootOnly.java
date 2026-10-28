@@ -92,7 +92,6 @@ public class TestForemanRootOnly extends ClusterTest {
   @Test
   public void nativeRootOnlyRequiresWorkersWithoutExplicitStrictFlag() throws Exception {
     client.alterSession("exec.native_fragment.enabled", true);
-    client.alterSession("exec.native_fragment.strict", false);
     try {
       if (org.apache.drill.exec.physical.impl.velox.NativeExecutionNode.isRpcEngine(cluster.drillbit().getContext().getEndpoint())) {
         rootStaysLocalAndScanAndComputeLeaveForeman();

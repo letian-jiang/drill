@@ -53,7 +53,7 @@ public final class FragmentEndpointPolicy {
     }
   }
 
-  public static List<DrillbitEndpoint> nativeCandidates(Collection<DrillbitEndpoint> online, DrillbitEndpoint foreman) throws PhysicalOperatorSetupException {
+  public static List<DrillbitEndpoint> nativeCandidates(Collection<DrillbitEndpoint> online) throws PhysicalOperatorSetupException {
     List<DrillbitEndpoint> candidates = online.stream().filter(org.apache.drill.exec.physical.impl.velox.NativeExecutionNode::isRpcEngine).toList();
     if (candidates.isEmpty()) {
       throw new PhysicalOperatorSetupException("Native scheduling requires a Drillbit with ready native control/data services");

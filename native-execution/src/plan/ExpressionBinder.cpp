@@ -52,12 +52,6 @@ Expr castTo(TypePtr type, Expr arg) {
         std::vector<Expr>{arg}, "drill_time_to_millis");
     return type->isInteger() ? castTo(type, millis) : millis;
   }
-  if (type->equivalent(*BIGINT()) && arg->type()->equivalent(*TIME_MICRO_UTC()))
-    return std::make_shared<core::CallTypedExpr>(BIGINT(),
-        std::vector<Expr>{arg}, "drill_time_micro_value");
-  if (type->equivalent(*TIME_MICRO_UTC()) && arg->type()->equivalent(*TIME()))
-    return std::make_shared<core::CallTypedExpr>(type,
-        std::vector<Expr>{arg}, "drill_time_to_micros");
   if (type->kind() == TypeKind::TIMESTAMP &&
       (arg->type()->isInteger() || arg->type()->equivalent(*BIGINT()))) {
     return std::make_shared<core::CallTypedExpr>(type,
@@ -130,12 +124,6 @@ Expr call(std::string name, std::vector<Expr> args, bool windowCall = false) {
       (name == "equalto" || name == "greaterthan" || name == "lessthan" ||
        name == "greaterthanorequal" || name == "lessthanorequal") &&
       args[0]->type()->isTime() && args[1]->type()->isTime()) {
-    // Pushed Iceberg TIME filters compare microseconds before the output
-    // projection normalizes to Drill's milliseconds.
-    if (!args[0]->type()->equivalent(*args[1]->type())) {
-      args[0] = castTo(TIME_MICRO_UTC(), args[0]);
-      args[1] = castTo(TIME_MICRO_UTC(), args[1]);
-    }
     // Spark's scalar comparison registry doesn't register the TIME logical
     // types. Compare physical values only here; columns keep their TIME type.
     args[0] = castTo(BIGINT(), args[0]);

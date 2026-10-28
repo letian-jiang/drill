@@ -60,8 +60,8 @@ public class TestNativeEndpointDiscovery {
     var worker = rpc(20);
     var ordinary = endpoint(30, 0);
     assertTrue(NativeExecutionNode.isRpcEngine(foreman));
-    assertEquals(List.of(foreman, worker), FragmentEndpointPolicy.nativeCandidates(List.of(foreman, ordinary, worker), foreman));
-    assertEquals(List.of(foreman), FragmentEndpointPolicy.nativeCandidates(List.of(foreman), foreman));
+    assertEquals(List.of(foreman, worker), FragmentEndpointPolicy.nativeCandidates(List.of(foreman, ordinary, worker)));
+    assertEquals(List.of(foreman), FragmentEndpointPolicy.nativeCandidates(List.of(foreman)));
     assertEquals(List.of(worker), FragmentEndpointPolicy.candidates(List.of(foreman, worker), foreman, false));
     assertEquals(List.of(foreman), FragmentEndpointPolicy.candidates(List.of(foreman, worker), foreman, true));
   }
@@ -80,14 +80,14 @@ public class TestNativeEndpointDiscovery {
   public void legacyIndependentAndPortZeroEnginesAreNotHomogeneousCandidates() {
     var legacy = endpoint(3, 31003);
     var embedded = rpc(10).toBuilder().setNativeExecution(NativeExecutionEndpoint.newBuilder().setAddress("127.0.0.1").setPort(0).setProtocolVersion(1)).build();
-    assertThrows(PhysicalOperatorSetupException.class, () -> FragmentEndpointPolicy.nativeCandidates(List.of(legacy, embedded), embedded));
+    assertThrows(PhysicalOperatorSetupException.class, () -> FragmentEndpointPolicy.nativeCandidates(List.of(legacy, embedded)));
   }
 
   @Test
   public void mandatoryScanAffinityRejectsInsteadOfComputeFallback() throws Exception {
     var capable = rpc(10);
     var ordinary = endpoint(30, 0);
-    var candidates = FragmentEndpointPolicy.nativeCandidates(List.of(ordinary, capable), ordinary);
+    var candidates = FragmentEndpointPolicy.nativeCandidates(List.of(ordinary, capable));
     assertThrows(PhysicalOperatorSetupException.class, () -> FragmentEndpointPolicy.validateAffinities(candidates, Map.of(ordinary, new EndpointAffinity(ordinary, 1, true, 1))));
     FragmentEndpointPolicy.validateAffinities(candidates, Map.of(capable, new EndpointAffinity(capable, 1, true, 1)));
   }
