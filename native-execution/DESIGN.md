@@ -227,7 +227,7 @@ JNI source 当前最多预取两批；单 reader 不并发 `next()`。取消可�
 | JNI scan | 上述职责，加原 plugin reader 读取 | 有，按批导入 |
 | Native 计算 / native exchange | Java 协调，root 仍在 Java | 默认计算及 exchange 不经 JNI；root 输出走 RPC |
 
-**主要入口：** [NativeEngineJni](src/jni/NativeEngineJni.cpp)、[ScanHost](../exec/java-exec/src/main/java/org/apache/drill/exec/nativeexecution/scan/ScanHost.java)、[PluginScanReader](../exec/java-exec/src/main/java/org/apache/drill/exec/nativeexecution/scan/PluginScanReader.java)（包含通用 reader）、[ScanContext](../exec/java-exec/src/main/java/org/apache/drill/exec/nativeexecution/scan/ScanContext.java)。
+**主要入口：** [NativeEngineJni](src/jni/NativeEngineJni.cpp)、[ScanHost](java/src/main/java/org/apache/drill/exec/nativeexecution/scan/ScanHost.java)、[PluginScanReader](java/src/main/java/org/apache/drill/exec/nativeexecution/scan/PluginScanReader.java)（包含通用 reader）、[ScanContext](java/src/main/java/org/apache/drill/exec/nativeexecution/scan/ScanContext.java)。
 
 ## 6. Fragment 之间的通信
 
@@ -351,7 +351,7 @@ extern "C" void drill_register_native_scan_plugins_v1(
 
 内建 Iceberg reader 消费原 Java 规划的 FileScanTask/split、字段 ID、范围、常量列及 delete 描述。当前实测的数据文件是本地 Parquet，delete 路径包含 Parquet/Avro；不据此承诺任意远端存储和全部 Iceberg 特性。
 
-**开发入口：** [NativeScanProvider](../exec/java-exec/src/main/java/org/apache/drill/exec/nativeexecution/scan/NativeScanProvider.java)、[NativeScanRegistry](src/scan/NativeScanRegistry.h)、[IcebergScan](src/scan/iceberg/IcebergScan.cpp)、[RangeScan 外部模块示例](examples/scan/RangeScanPlugin.cpp)、[完整接入说明](README.md#开发者接口接入-native-scan)。
+**开发入口：** [NativeScanProvider](java/src/main/java/org/apache/drill/exec/nativeexecution/scan/NativeScanProvider.java)、[NativeScanRegistry](src/scan/NativeScanRegistry.h)、[IcebergScan](src/scan/iceberg/IcebergScan.cpp)、[RangeScan 外部模块示例](examples/scan/RangeScanPlugin.cpp)、[完整接入说明](README.md#开发者接口接入-native-scan)。
 
 ## 9. 类型映射、固定 Schema 与 Drill 语义
 
@@ -402,7 +402,7 @@ Velox Flat/Constant/Dictionary 是**向量编码**，不等同于 Drill DICT 类
 
 支持性按实际字段树递归检查，不支持时明确失败，不自动把 DECIMAL 转 DOUBLE、把未知列转 VARCHAR，也不切换 Java fragment。已支持类型仍要检查具体函数签名和布局；类型可导入不等于所有运算已支持。
 
-**类型实现入口：** [NativeColumnarBridge](../exec/java-exec/src/main/java/org/apache/drill/exec/physical/impl/velox/NativeColumnarBridge.java)、[ScanBatchLayout](../exec/java-exec/src/main/java/org/apache/drill/exec/nativeexecution/scan/ScanBatchLayout.java)、[ColumnarBatch](src/columnar/ColumnarBatch.cpp)、[DrillArrayType](src/columnar/DrillArrayType.h)、[DrillMapType](src/columnar/DrillMapType.h)、[DrillDict lookup](src/velox/functions/DrillDict.cpp)。
+**类型实现入口：** [NativeColumnarBridge](java/src/main/java/org/apache/drill/exec/physical/impl/velox/NativeColumnarBridge.java)、[ScanBatchLayout](java/src/main/java/org/apache/drill/exec/nativeexecution/scan/ScanBatchLayout.java)、[ColumnarBatch](src/columnar/ColumnarBatch.cpp)、[DrillArrayType](src/columnar/DrillArrayType.h)、[DrillMapType](src/columnar/DrillMapType.h)、[DrillDict lookup](src/velox/functions/DrillDict.cpp)。
 
 ### 9.4 固定 Schema 与输出元数据
 
@@ -426,6 +426,9 @@ Native 代码全部位于 `drill/native-execution`：
 
 ```text
 drill/native-execution/
+  java/src/
+    main/java/        Java scan 接口、JNI bridge 和 columnar layout
+    test/java/        对应 Java 回归
   src/
     execution/        NativeEngine、公共 Velox runtime
     worker/           MinorTaskRegistry、任务与状态协调
@@ -443,7 +446,7 @@ drill/native-execution/
   tests/              执行、协议、schema、reader、取消与模块测试
 ```
 
-Java 的节点生命周期和 scan 公共接口位于 `exec/java-exec/.../nativeexecution/`；调度扩展位于 `planner/fragment/`。部分 serializer/columnar bridge 仍在历史 `physical/impl/velox/` 包内，不表示仍采用 Velox4J 或旧宿主方案。
+Java scan 公共接口、JNI scan bridge 和 columnar layout 源码位于 `native-execution/java/`，由 `exec/java-exec` 作为附加 source roots 编译/打包，保持原包名和 JNI 签名。节点生命周期和调度扩展仍位于 `exec/java-exec/`；serializer/columnar bridge 保留历史 `physical/impl/velox/` 包名，不表示仍采用 Velox4J 或旧宿主方案。
 
 修改原 Drill 的集中边界是节点生命周期与 endpoint 发布、并行化候选/路由、fragment 初始化协议、Java root 的批次接收，以及必要的语义修复。原 plugin 的读取实现不因通用 JNI 接入而改写；plugin 选择 native reader 时，只需增加 descriptor 接口实现和对应 C++ provider。
 

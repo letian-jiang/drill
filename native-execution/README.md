@@ -4,6 +4,10 @@
 
 [设计方案](DESIGN.md)包含类型映射、minor/driver 调度、两类 JNI 和通信契约；[目录说明](CODE_STRUCTURE.md)定位实现。动态 schema 暂不支持，绑定后变化明确失败。
 
+## Java scan 源码
+
+JNI scan 桥接、scan 接口和字段/buffer 布局位于 `java/src/main/java/`，对应回归位于 `java/src/test/java/`。这些类依赖原 Drill scan/context API，作为 `exec/java-exec` 的附加 source roots 编译，并随原 artifact 打包；包名、JNI 签名和运行时 classpath 不变。节点生命周期、调度和 fragment 提交接入仍位于 `exec/java-exec/`。
+
 ## 构建与依赖
 
 当前工具链面向 Linux amd64 / AVX2，C++20、JNI JDK、CMake 3.28+、Ninja，以及 Boost/Folly 开发依赖和 RE2。Iceberg SDK 单独使用 C++23/Arrow 工具链。
@@ -35,7 +39,7 @@ ALTER SESSION SET `exec.native_scan.enabled` = true;
 
 ## Native scan 开发者接口
 
-Java SubScan 实现 [NativeScanProvider](../exec/java-exec/src/main/java/org/apache/drill/exec/nativeexecution/scan/NativeScanProvider.java)，只提供已分配工作描述：
+Java SubScan 实现 [NativeScanProvider](java/src/main/java/org/apache/drill/exec/nativeexecution/scan/NativeScanProvider.java)，只提供已分配工作描述：
 
 ```java
 @Override

@@ -944,6 +944,32 @@
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>build-helper-maven-plugin</artifactId>
         <executions>
+          <!-- Native scan bridge sources use Drill's scan/context APIs and are
+               compiled into this artifact to avoid a circular module dependency. -->
+          <execution>
+            <id>add-native-scan-sources</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>add-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>${project.basedir}/../../native-execution/java/src/main/java</source>
+              </sources>
+            </configuration>
+          </execution>
+          <execution>
+            <id>add-native-scan-test-sources</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>add-test-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>${project.basedir}/../../native-execution/java/src/test/java</source>
+              </sources>
+            </configuration>
+          </execution>
           <execution>
             <id>add-sources-as-resources</id>
             <phase>process-sources</phase>
@@ -954,6 +980,9 @@
               <resources>
                 <resource>
                   <directory>src/main/java</directory>
+                </resource>
+                <resource>
+                  <directory>${project.basedir}/../../native-execution/java/src/main/java</directory>
                 </resource>
                 <resource>
                   <directory>${project.build.directory}/generated-sources</directory>
@@ -971,6 +1000,9 @@
               <resources>
                 <resource>
                   <directory>src/test/java</directory>
+                </resource>
+                <resource>
+                  <directory>${project.basedir}/../../native-execution/java/src/test/java</directory>
                 </resource>
               </resources>
             </configuration>

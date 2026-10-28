@@ -6,6 +6,9 @@
 native-execution/
   CMakeLists.txt / prepare.py / build.sh
   DESIGN.md / README.md
+  java/src/
+    main/java/       Java scan SPI、JNI scan bridge、字段/buffer 布局
+    test/java/       对应 Java scan/列式数据回归
   src/
     execution/       NativeEngine、进程共享 Velox CPU/I/O pools
     worker/          MinorTaskRegistry、计划装配、状态/取消
@@ -30,7 +33,7 @@ native-execution/
     worker/          隔离引擎的协议/原 reader 回归，不是独立部署入口
 ```
 
-Java 节点服务和 scan API 位于 `exec/java-exec/.../nativeexecution/`。原 minor serializer、schema/buffer layout 描述和能力检测仍位于 `physical/impl/velox/`，不依赖 Velox4J。批次复制/重建的 round-trip fixture 位于 Java 测试目录 `NativeColumnarTestSupport`。
+Java scan API、JNI scan bridge 和 `NativeColumnarBridge` 源码位于 `native-execution/java/src/main/java/`；对应测试位于 `java/src/test/java/`。`exec/java-exec/pom.xml` 注册这两个附加源码目录，并继续将类和源码打包到原 `drill-java-exec` artifact；不创建循环依赖的独立 Maven 模块。包名与 JNI 签名保持不变。Java 节点服务、minor serializer 和能力检测仍位于 `exec/java-exec/`。批次复制/重建的 round-trip fixture 为 `NativeColumnarTestSupport`。
 
 - `NativeExecutionService` 由 WorkManager/Drillbit 生命周期持有，绑定已有 JVM/ScanHost，启动 native listeners，并在唯一 endpoint 注册中发布能力。
 - `SimpleParallelizer/FragmentEndpointPolicy` 过滤候选节点，保持原成本/affinity 的 minor placement。
